@@ -1,0 +1,10 @@
+# Runtime data: the database, backups and any legacy files. Never commit these.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.pem
+node_modules/
+.DS_Store
+# Local tool settings
+.claude/

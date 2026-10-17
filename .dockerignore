@@ -1,0 +1,15 @@
+.git
+.gitignore
+.claude
+.DS_Store
+data
+node_modules
+*.pem
+tools/docs-screenshots.mjs
+grc.jpg
+Dockerfile
+docker-compose.yml
+Caddyfile
+fly.toml
+README.md
+DEPLOY.md

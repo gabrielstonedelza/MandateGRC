@@ -1,0 +1,146 @@
+// Policy template library. Every template follows the 8-part policy anatomy and
+// is written to pass MandateGRC's own linter: must/shall, measurable, framework-mapped.
+const enforcement = (name) =>
+  `Compliance with the ${name} shall be verified through quarterly control testing, internal audit and continuous monitoring. ` +
+  'Any violation must be reported to the Information Security Office within 24 hours of discovery. ' +
+  'Personnel found in violation shall be subject to disciplinary action up to and including termination of employment or contract, ' +
+  'and the organization may pursue civil or criminal action where laws have been broken. ' +
+  'Deviations from this policy must be requested through the formal Policy Exception process and approved before the deviation occurs.';
+
+const roles = (owner, custodian, extra = []) => [
+  { role: 'Policy Owner', responsibility: `${owner} owns this policy, approves changes, and ensures it is reviewed at least annually.` },
+  { role: 'Custodian', responsibility: custodian },
+  { role: 'Users', responsibility: 'All in-scope personnel must read, acknowledge and comply with this policy, and must report suspected violations.' },
+  { role: 'Management', responsibility: 'Line managers must ensure their teams complete required acknowledgements and must enforce this policy within their areas.' },
+  ...extra,
+];
+
+export const TEMPLATES = [
+  {
+    key: 'access-control',
+    title: 'Access Control Policy',
+    summary: 'Least privilege, MFA, joiner-mover-leaver and access reviews.',
+    owner: 'Chief Information Security Officer',
+    purpose: 'This policy establishes the requirements for granting, reviewing and revoking access to information systems so that access is limited to authorized users with a legitimate business need, reducing the risk of unauthorized disclosure, modification or destruction of information.',
+    scope: 'This policy applies to all employees, contractors, consultants, temporary staff and third parties who access organizational information systems, and to all systems, applications, databases, cloud services and network devices owned or managed by the organization.',
+    statements: [
+      ['Access to information systems must be granted on the principle of least privilege and must be approved by the system owner before provisioning.', ['ISO27001:5.15', 'ISO27001:5.18', 'NIST80053:AC-6', 'SOC2:CC6.3', 'CIS:6']],
+      ['All user accounts must be uniquely attributable to a single individual; shared or generic accounts shall not be used except where documented and approved by the CISO.', ['ISO27001:5.16', 'NIST80053:AC-2', 'SOC2:CC6.2', 'CIS:5']],
+      ['Multi-factor authentication must be enforced for all remote access, all privileged accounts and all access to production systems.', ['ISO27001:8.5', 'NIST80053:IA-2', 'CIS:6', 'PCIDSS:8', 'SOC2:CC6.1']],
+      ['Passwords must be a minimum of 14 characters and must be checked against a list of known-compromised passwords at creation.', ['ISO27001:5.17', 'NIST80053:IA-5', 'PCIDSS:8']],
+      ['Accounts must be locked for at least 30 minutes after 10 consecutive failed login attempts.', ['NIST80053:AC-7', 'PCIDSS:8']],
+      ['Privileged access must be reviewed and recertified by system owners every 90 days, and all other access shall be recertified every 180 days.', ['ISO27001:8.2', 'ISO27001:5.18', 'SOC2:CC6.3', 'NIST80053:AC-2']],
+      ['Access for terminated personnel must be revoked within 24 hours of separation, and within 1 hour for involuntary terminations.', ['ISO27001:6.5', 'NIST80053:PS-4', 'SOC2:CC6.2', 'HIPAA:164.308(a)(3)']],
+      ['Sessions must be automatically locked after 15 minutes of inactivity.', ['NIST80053:AC-11', 'ISO27001:7.7']],
+    ],
+    roles: roles('The Chief Information Security Officer', 'IT Operations and system administrators must provision, modify and revoke access as approved, and must retain access request records for 3 years.', [{ role: 'System Owners', responsibility: 'System owners must approve access requests for their systems and must recertify access to them at the intervals set in this policy.' }]),
+    enforcement: enforcement('Access Control Policy'),
+  },
+  {
+    key: 'acceptable-use',
+    title: 'Acceptable Use Policy',
+    summary: 'Rules of behaviour for devices, email, internet and data.',
+    owner: 'Chief Information Security Officer',
+    purpose: 'This policy defines the acceptable use of organizational information assets so that personnel understand their obligations and the organization is protected from legal, reputational and security harm resulting from misuse.',
+    scope: 'This policy applies to all employees, contractors and third parties who use organizational devices, accounts, networks, email, collaboration tools or data, whether on premises or working remotely.',
+    statements: [
+      ['Personnel must use organizational information assets only for authorized business purposes; limited personal use shall not interfere with duties or violate any other policy.', ['ISO27001:5.10', 'NIST80053:PL-4', 'HIPAA:164.310(b)']],
+      ['Users must not install unapproved software on organizational devices; only software from the approved catalogue shall be installed.', ['ISO27001:8.19', 'CIS:2']],
+      ['Users must lock their screen whenever they leave a device unattended and must store confidential documents securely at the end of each working day.', ['ISO27001:7.7', 'NIST80053:AC-11']],
+      ['Confidential data must not be transferred to personal email accounts, personal cloud storage or removable media without written approval from the data owner.', ['ISO27001:5.14', 'ISO27001:8.12', 'SOC2:CC6.7']],
+      ['Users must report suspected phishing emails, lost devices or security incidents to the Service Desk within 1 hour of discovery.', ['ISO27001:6.8', 'NIST80053:IR-6', 'SOC2:CC7.3']],
+      ['All personnel must complete security awareness training within 30 days of joining and annually thereafter.', ['ISO27001:6.3', 'NIST80053:AT-2', 'CIS:14', 'HIPAA:164.308(a)(5)']],
+      ['Organizational devices and data must be returned within 5 business days of employment ending.', ['ISO27001:5.11']],
+    ],
+    roles: roles('The Chief Information Security Officer', 'IT Operations must configure devices to enforce this policy technically wherever possible and must maintain the approved software catalogue.', [{ role: 'Data Owners', responsibility: 'Data owners must decide on requests to transfer the information they own outside approved systems, and must record each approval.' }, { role: 'Human Resources', responsibility: 'HR must obtain a signed acknowledgement of this policy from every new hire before system access is granted.' }]),
+    enforcement: enforcement('Acceptable Use Policy'),
+  },
+  {
+    key: 'incident-response',
+    title: 'Incident Response Policy',
+    summary: 'Detection, triage, containment, notification and lessons learned.',
+    owner: 'Head of Security Operations',
+    purpose: 'This policy establishes a consistent, timely and effective approach to detecting, responding to and recovering from information security incidents in order to minimize harm and meet legal and contractual notification obligations.',
+    scope: 'This policy applies to all employees, contractors and third parties, and to all information systems, data and services owned, operated or managed on behalf of the organization.',
+    statements: [
+      ['The organization must maintain a documented Incident Response Plan that shall be reviewed annually and after every major incident.', ['ISO27001:5.24', 'NIST80053:IR-8', 'NISTCSF:RS.MA', 'SOC2:CC7.4']],
+      ['All suspected security incidents must be reported to the Security Operations Center within 1 hour of discovery.', ['ISO27001:6.8', 'NIST80053:IR-6', 'NISTCSF:RS.CO']],
+      ['Every reported event must be triaged and assigned a severity rating (SEV1–SEV4) within 4 hours of receipt.', ['ISO27001:5.25', 'NISTCSF:RS.AN', 'SOC2:CC7.3']],
+      ['SEV1 incidents must be escalated to the CISO and the Incident Response Team must be convened within 30 minutes.', ['ISO27001:5.26', 'NIST80053:IR-4']],
+      ['Personal data breaches must be notified to the relevant supervisory authority within 72 hours of the organization becoming aware, where required by law.', ['GDPR:Art. 33', 'GDPR:Art. 34', 'ISO27001:5.5']],
+      ['Evidence relating to incidents must be collected and preserved with a documented chain of custody.', ['ISO27001:5.28']],
+      ['A post-incident review must be completed within 10 business days of closing any SEV1 or SEV2 incident, and corrective actions shall be tracked to completion.', ['ISO27001:5.27', 'NISTCSF:ID.IM', 'SOC2:CC7.5']],
+      ['The Incident Response Plan must be tested through a tabletop exercise at least once every 12 months.', ['NISTCSF:RS.MA', 'CIS:17']],
+    ],
+    roles: roles('The Head of Security Operations', 'The Security Operations Center must monitor alerts 24x7, maintain the incident register and coordinate response activities.', [{ role: 'Incident Commander', responsibility: 'The Incident Commander must lead response for SEV1 and SEV2 incidents and approve all external communications with Legal.' }]),
+    enforcement: enforcement('Incident Response Policy'),
+  },
+  {
+    key: 'data-classification',
+    title: 'Data Classification & Handling Policy',
+    summary: 'Four-tier classification, labelling, encryption and disposal.',
+    owner: 'Chief Data Officer',
+    purpose: 'This policy defines how information is classified, labelled and handled so that protection measures are proportionate to the sensitivity and value of the information.',
+    scope: 'This policy applies to all employees, contractors and third parties, and to all information created, received, stored or processed by the organization in any format, including electronic, paper and verbal.',
+    statements: [
+      ['All information must be classified by its owner into one of four levels: Public, Internal, Confidential or Restricted.', ['ISO27001:5.12', 'SOC2:C1.1', 'NISTCSF:ID.AM']],
+      ['Documents and systems containing Confidential or Restricted information must be labelled with their classification.', ['ISO27001:5.13']],
+      ['Confidential and Restricted information must be encrypted at rest using AES-256 or stronger and in transit using TLS 1.2 or higher.', ['ISO27001:8.24', 'NIST80053:SC-13', 'NIST80053:SC-28', 'NIST80053:SC-8', 'PCIDSS:3', 'PCIDSS:4', 'HIPAA:164.312(e)(1)']],
+      ['Restricted information must not be stored on removable media or end-user devices unless approved by the data owner and encrypted.', ['ISO27001:7.10', 'ISO27001:8.12', 'CIS:3']],
+      ['Information must be retained according to the Records Retention Schedule and securely deleted within 30 days of its retention period expiring.', ['ISO27001:5.33', 'ISO27001:8.10', 'GDPR:Art. 5']],
+      ['Storage media must be sanitized or physically destroyed before disposal or re-use, and a certificate of destruction shall be retained.', ['ISO27001:7.14', 'NIST80053:MP-6', 'SOC2:C1.2', 'SOC2:CC6.5']],
+    ],
+    roles: roles('The Chief Data Officer', 'System administrators must implement technical controls (encryption, access restriction, DLP) that enforce the handling rules for each classification level.', [{ role: 'Data Owner', responsibility: 'Data owners must classify their information assets and review classifications at least annually.' }]),
+    enforcement: enforcement('Data Classification & Handling Policy'),
+  },
+  {
+    key: 'backup-recovery',
+    title: 'Backup & Recovery Policy',
+    summary: 'Backup frequency, retention, immutability and restore testing.',
+    owner: 'Head of IT Infrastructure',
+    purpose: 'This policy ensures that critical information and systems can be restored within agreed recovery objectives following data loss, corruption, ransomware or disaster.',
+    scope: 'This policy applies to all production systems, databases, file stores and SaaS platforms holding business data, and to all IT staff and service providers responsible for operating them.',
+    statements: [
+      ['Production data must be backed up at least every 24 hours, and Tier 1 systems shall achieve a Recovery Point Objective (RPO) of 4 hours or less.', ['ISO27001:8.13', 'NIST80053:CP-9', 'CIS:11', 'SOC2:A1.2']],
+      ['At least one backup copy must be stored offline or in immutable storage in a separate geographic location.', ['ISO27001:8.13', 'CIS:11', 'NISTCSF:PR.DS']],
+      ['Backups must be encrypted with AES-256 and encryption keys shall be stored separately from the backup data.', ['ISO27001:8.24', 'NIST80053:SC-28']],
+      ['Restore tests must be performed quarterly for Tier 1 systems and annually for all other systems, and results shall be documented.', ['ISO27001:5.30', 'NIST80053:CP-2', 'NISTCSF:RC.RP', 'HIPAA:164.308(a)(7)']],
+      ['Backup job failures must generate an alert and be remediated within 24 hours.', ['ISO27001:8.16', 'CIS:11']],
+    ],
+    roles: roles('The Head of IT Infrastructure', 'The Infrastructure team must operate backup tooling, monitor job success and perform restore tests.'),
+    enforcement: enforcement('Backup & Recovery Policy'),
+  },
+  {
+    key: 'vulnerability-management',
+    title: 'Vulnerability & Patch Management Policy',
+    summary: 'Scanning cadence and risk-based remediation SLAs.',
+    owner: 'Chief Information Security Officer',
+    purpose: 'This policy establishes requirements for identifying, prioritizing and remediating technical vulnerabilities to reduce the likelihood of exploitation.',
+    scope: 'This policy applies to all servers, endpoints, network devices, cloud workloads, containers and applications owned or managed by the organization, and to all personnel who administer them.',
+    statements: [
+      ['All internet-facing assets must be scanned for vulnerabilities at least weekly, and all internal assets at least monthly.', ['ISO27001:8.8', 'NIST80053:RA-5', 'CIS:7', 'PCIDSS:11']],
+      ['Critical vulnerabilities (CVSS 9.0+) must be remediated within 7 days; High within 30 days; Medium within 90 days.', ['ISO27001:8.8', 'NIST80053:SI-2', 'SOC2:CC7.1', 'PCIDSS:6']],
+      ['Vulnerabilities listed in the CISA Known Exploited Vulnerabilities catalogue must be remediated within 14 days regardless of CVSS score.', ['NIST80053:SI-2', 'NISTCSF:ID.RA']],
+      ['Vulnerabilities that cannot be remediated within the SLA must be documented in an approved policy exception with compensating controls.', ['ISO27001:8.8', 'NISTCSF:ID.RA']],
+      ['An independent penetration test must be performed at least annually and after any significant infrastructure change.', ['CIS:18', 'PCIDSS:11', 'ISO27001:8.29']],
+    ],
+    roles: roles('The Chief Information Security Officer', 'System owners must apply patches within the defined SLAs and must verify remediation through rescanning.'),
+    enforcement: enforcement('Vulnerability & Patch Management Policy'),
+  },
+  {
+    key: 'third-party-risk',
+    title: 'Third-Party Risk Management Policy',
+    summary: 'Vendor due diligence, contracts, tiering and monitoring.',
+    owner: 'Head of Procurement & Vendor Risk',
+    purpose: 'This policy ensures that risks introduced by suppliers, vendors and service providers are identified, assessed and managed throughout the relationship lifecycle.',
+    scope: 'This policy applies to all third parties that access, store, process or transmit organizational information or connect to organizational systems, and to all staff who engage them.',
+    statements: [
+      ['Every new vendor must complete a security due-diligence assessment before contract signature, and the vendor shall be assigned a risk tier (Critical, High, Moderate, Low).', ['ISO27001:5.19', 'NISTCSF:GV.SC', 'SOC2:CC9.2', 'NIST80053:SR-3']],
+      ['Contracts with vendors handling Confidential data must include security, breach-notification (within 48 hours) and right-to-audit clauses.', ['ISO27001:5.20', 'GDPR:Art. 28', 'HIPAA:164.308(b)(1)']],
+      ['Critical and High tier vendors must be reassessed annually, and Moderate tier vendors every 24 months.', ['ISO27001:5.22', 'SOC2:CC9.2', 'CIS:15']],
+      ['Vendor access to organizational systems must be revoked within 24 hours of contract termination.', ['ISO27001:5.18', 'ISO27001:5.22']],
+    ],
+    roles: roles('The Head of Procurement & Vendor Risk', 'The Vendor Risk team must maintain the vendor inventory, perform assessments and track remediation of findings.', [{ role: 'Business Sponsor', responsibility: 'The business sponsor must justify the need for each vendor and ensure the vendor meets contractual security obligations.' }]),
+    enforcement: enforcement('Third-Party Risk Management Policy'),
+  },
+];

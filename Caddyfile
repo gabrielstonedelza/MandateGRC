@@ -1,0 +1,10 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt). Caddy sets X-Forwarded-For/-Proto,
+# which MandateGRC trusts because the image sets TRUST_PROXY=1.
+mandategrc.app {
+	encode zstd gzip
+	reverse_proxy app:8080
+}
+
+www.mandategrc.app {
+	redir https://mandategrc.app{uri} permanent
+}

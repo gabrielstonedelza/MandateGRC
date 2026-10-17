@@ -1,0 +1,16 @@
+{
+  "name": "mandategrc",
+  "version": "1.0.0",
+  "description": "MandateGRC \u2014 policy-first Governance, Risk & Compliance workbench for GRC analysts",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "backup": "node --disable-warning=ExperimentalWarning tools/backup.mjs",
+    "docs:screenshots": "node tools/docs-screenshots.mjs"
+  }
+}

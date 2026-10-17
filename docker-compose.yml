@@ -1,0 +1,33 @@
+# Self-hosting on any Linux VPS (Hetzner, DigitalOcean, Lightsail…):
+#   1. Point mandategrc.app (A/AAAA records) at the server.
+#   2. docker compose up -d
+# Caddy obtains and renews the HTTPS certificate automatically.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      MANDATEGRC_ORIGIN: https://mandategrc.app
+    volumes:
+      - mandategrc-data:/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  mandategrc-data:
+  caddy-data:
+  caddy-config:
