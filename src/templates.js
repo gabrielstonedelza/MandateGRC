@@ -17,7 +17,7 @@ const roles = (owner, custodian, extra = []) => [
 
 export const TEMPLATES = [
   {
-    key: 'access-control',
+    key: 'access-control', type: 'access-control',
     title: 'Access Control Policy',
     summary: 'Least privilege, MFA, joiner-mover-leaver and access reviews.',
     owner: 'Chief Information Security Officer',
@@ -37,7 +37,7 @@ export const TEMPLATES = [
     enforcement: enforcement('Access Control Policy'),
   },
   {
-    key: 'acceptable-use',
+    key: 'acceptable-use', type: 'acceptable-use',
     title: 'Acceptable Use Policy',
     summary: 'Rules of behaviour for devices, email, internet and data.',
     owner: 'Chief Information Security Officer',
@@ -56,7 +56,7 @@ export const TEMPLATES = [
     enforcement: enforcement('Acceptable Use Policy'),
   },
   {
-    key: 'incident-response',
+    key: 'incident-response', type: 'incident-response',
     title: 'Incident Response Policy',
     summary: 'Detection, triage, containment, notification and lessons learned.',
     owner: 'Head of Security Operations',
@@ -76,7 +76,7 @@ export const TEMPLATES = [
     enforcement: enforcement('Incident Response Policy'),
   },
   {
-    key: 'data-classification',
+    key: 'data-classification', type: 'data-classification',
     title: 'Data Classification & Handling Policy',
     summary: 'Four-tier classification, labelling, encryption and disposal.',
     owner: 'Chief Data Officer',
@@ -94,7 +94,7 @@ export const TEMPLATES = [
     enforcement: enforcement('Data Classification & Handling Policy'),
   },
   {
-    key: 'backup-recovery',
+    key: 'backup-recovery', type: 'backup',
     title: 'Backup & Recovery Policy',
     summary: 'Backup frequency, retention, immutability and restore testing.',
     owner: 'Head of IT Infrastructure',
@@ -111,7 +111,7 @@ export const TEMPLATES = [
     enforcement: enforcement('Backup & Recovery Policy'),
   },
   {
-    key: 'vulnerability-management',
+    key: 'vulnerability-management', type: 'vulnerability',
     title: 'Vulnerability & Patch Management Policy',
     summary: 'Scanning cadence and risk-based remediation SLAs.',
     owner: 'Chief Information Security Officer',
@@ -128,7 +128,7 @@ export const TEMPLATES = [
     enforcement: enforcement('Vulnerability & Patch Management Policy'),
   },
   {
-    key: 'third-party-risk',
+    key: 'third-party-risk', type: 'third-party',
     title: 'Third-Party Risk Management Policy',
     summary: 'Vendor due diligence, contracts, tiering and monitoring.',
     owner: 'Head of Procurement & Vendor Risk',

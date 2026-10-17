@@ -2,7 +2,7 @@ import {
   html, raw, esc, mount, $, $$, on, state, can, GET, POST, PUT, DEL, toast, fail, modal, confirmDialog, formData,
   fmtDate, fmtDateTime, ago, pill, ring, icon, download, todayStr, statusLabel,
 } from '../core.js';
-import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, analyzeStatement, applyFix, suggestThemes, THEME_LABELS } from '../lint.js';
+import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, POLICY_TYPE_OPTIONS, analyzeStatement, applyFix, suggestThemes, THEME_LABELS } from '../lint.js';
 import { ctrlLabel, fwName } from './shared.js';
 
 const STATUS_TABS = [['all', 'All'], ['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Published'], ['retired', 'Retired']];
@@ -64,25 +64,27 @@ function employeeList(el, list) {
   on(el, 'click', 'tr[data-href]', (e, tr) => { location.hash = tr.dataset.href; });
 }
 
-// New policy: an explicit choice between a blank draft and a prefilled template.
+// New policy: choose the policy type, then start blank (empty sections) or from that type's template.
 export function newPolicyDialog({ template = null } = {}) {
   const templates = state.meta.templates || [];
+  const tplByType = Object.fromEntries(templates.map((t) => [t.type, t]));
   let mode = template ? 'template' : 'blank';
-  let tplKey = template || templates[0]?.key;
-  const tplOf = (k) => templates.find((t) => t.key === k);
+  let type = (templates.find((t) => t.key === template) || templates[0])?.type || POLICY_TYPE_OPTIONS[0].key;
+  const nameFor = (k) => tplByType[k]?.title || (POLICY_TYPE_OPTIONS.find((t) => t.key === k)?.name ? `${POLICY_TYPE_OPTIONS.find((t) => t.key === k).name} Policy` : '');
   modal({
     title: 'New policy', wide: true,
     body: html`<form id="np" class="stack" novalidate>
       <div class="np-choice" role="radiogroup" aria-label="How to start">
         <label class="np-opt"><input type="radio" name="mode" value="blank" ${mode === 'blank' ? 'checked' : ''}>
-          <span class="np-ic">${icon('policy')}</span><span><b>Blank policy</b><small>Start from scratch with your own wording. Every section is empty and the linter guides you.</small></span></label>
+          <span class="np-ic">${icon('policy')}</span><span><b>Blank policy</b><small>Pick the type, then write everything yourself. Every section starts empty.</small></span></label>
         <label class="np-opt"><input type="radio" name="mode" value="template" ${mode === 'template' ? 'checked' : ''}>
-          <span class="np-ic">${icon('template')}</span><span><b>From a template</b><small>Start from professionally written statements, already mapped to frameworks, then tailor them.</small></span></label>
+          <span class="np-ic">${icon('template')}</span><span><b>From a template</b><small>Start from professionally written statements for that type, already mapped to frameworks, then tailor them.</small></span></label>
       </div>
-      <div id="np-tpl" class="${mode === 'template' ? '' : 'hidden'}">
-        <label class="f"><span>Template</span><select name="tpl">${templates.map((t) => html`<option value="${t.key}" ${t.key === tplKey ? 'selected' : ''}>${t.title}</option>`)}</select></label>
-        <div class="muted small mt" id="np-tpl-sum"></div>
-      </div>
+      <label class="f"><span>Policy type</span><select name="type">
+        ${POLICY_TYPE_OPTIONS.map((t) => html`<option value="${t.key}" ${t.key === type ? 'selected' : ''}>${t.name}</option>`)}
+        <option value="other" data-blank-only>Other / custom (no coverage checklist)</option>
+      </select></label>
+      <div class="muted small" id="np-sum"></div>
       <div class="form-grid">
         <label class="f"><span>Policy name</span><input name="title" maxlength="200" placeholder="e.g. Encryption Policy" autofocus></label>
         <label class="f"><span>Policy owner <em>(optional, a role is best)</em></span><input name="owner" maxlength="200" placeholder="e.g. Chief Information Security Officer"></label>
@@ -93,29 +95,39 @@ export function newPolicyDialog({ template = null } = {}) {
     onMount: ({ el, close }) => {
       const form = $('#np', el);
       const titleIn = form.elements.namedItem('title');
-      let autoTitle = true;
-      titleIn.addEventListener('input', () => { autoTitle = !titleIn.value.trim(); });
+      const typeSel = form.elements.namedItem('type');
+      const otherOpt = typeSel.querySelector('[data-blank-only]');
+      let lastAuto = '';
       const sync = () => {
         mode = form.querySelector('[name=mode]:checked').value;
-        tplKey = form.elements.namedItem('tpl')?.value || tplKey;
-        $('#np-tpl', el).classList.toggle('hidden', mode !== 'template');
-        const t = tplOf(tplKey);
-        $('#np-tpl-sum', el).textContent = t ? `${t.summary} ${t.statements} statements · maps to ${t.frameworks.join(', ')}.` : '';
-        if (mode === 'template' && autoTitle && t) titleIn.value = t.title;
-        if (mode === 'blank' && autoTitle) titleIn.value = '';
+        // "Other" has no template, so it is only offered for blank policies.
+        otherOpt.disabled = mode === 'template';
+        if (mode === 'template' && typeSel.value === 'other') typeSel.value = POLICY_TYPE_OPTIONS[0].key;
+        type = typeSel.value;
+        // Suggest a name from the type until the author types their own.
+        const suggested = type === 'other' ? '' : nameFor(type);
+        if (!titleIn.value.trim() || titleIn.value === lastAuto) { titleIn.value = suggested; lastAuto = suggested; }
+        const opt = POLICY_TYPE_OPTIONS.find((t) => t.key === type);
+        const tpl = tplByType[type];
+        $('#np-sum', el).textContent = type === 'other'
+          ? 'No coverage checklist: the review still checks structure, language, benchmarks and consistency.'
+          : mode === 'template' && tpl ? `${tpl.summary} ${tpl.statements} statements · maps to ${tpl.frameworks.join(', ')}.`
+            : `The review will check that you cover ${opt.topics.length} must-have topics: ${opt.topics.join(', ')}.`;
         $('#np-note', el).textContent = mode === 'blank'
           ? 'Your draft opens with all 8 sections empty. Nothing is pre-filled except the name and owner you enter here.'
           : 'The draft is a copy of the template. Review every statement, and change the owner, numbers and scope to fit your organization before submitting.';
       };
       sync();
-      on(el, 'change', '[name=mode], [name=tpl]', sync);
+      on(el, 'change', '[name=mode], [name=type]', sync);
       const go = async (e) => {
         e?.preventDefault();
         const title = titleIn.value.trim();
         const owner = form.elements.namedItem('owner').value.trim();
-        if (mode === 'blank' && !title) { titleIn.focus(); return toast('Give the policy a name.', 'err'); }
+        if (!title) { titleIn.focus(); return toast('Give the policy a name.', 'err'); }
         try {
-          const r = await POST('/api/policies', mode === 'template' ? { template: tplKey, title, owner } : { title, owner });
+          const r = await POST('/api/policies', mode === 'template'
+            ? { template: tplByType[type].key, title, owner }
+            : { title, owner, policy_type: type });
           close();
           toast(mode === 'template' ? 'Draft created from the template. Tailor it to your organization.' : 'Blank draft created.');
           location.hash = `#/policies/${r.id}`;
@@ -172,6 +184,7 @@ export async function policyEditorView(el, id) {
     title: p.title, owner: p.owner, classification: p.classification, effective_date: p.effective_date || '',
     review_cycle_months: p.review_cycle_months, purpose: p.purpose, scope: p.scope, statements: p.statements,
     roles: p.roles, enforcement: p.enforcement, ref_controls: p.ref_controls, related_docs: p.related_docs || '',
+    policy_type: p.policy_type || '',
   });
   const snapshotSaved = () => { saved = JSON.stringify(content()); };
   const dirty = () => editable() && JSON.stringify(content()) !== saved;
@@ -245,6 +258,10 @@ export async function policyEditorView(el, id) {
       ${sectionCard('header', html`<div class="card-b form-grid">
         <label class="f full"><span>Policy name</span><input data-f="title" value="${p.title}" maxlength="200" ${ro()}></label>
         <label class="f"><span>Policy owner <em>(accountable role or person)</em></span><input data-f="owner" value="${p.owner}" maxlength="200" placeholder="e.g. Chief Information Security Officer" ${ro()}></label>
+        <label class="f"><span>Policy type <em>(sets the review checklist)</em></span><select data-f="policy_type" ${dis()}>
+          <option value="" ${!p.policy_type ? 'selected' : ''}>Detect from the policy name</option>
+          ${POLICY_TYPE_OPTIONS.map((t) => html`<option value="${t.key}" ${p.policy_type === t.key ? 'selected' : ''}>${t.name}</option>`)}
+          <option value="other" ${p.policy_type === 'other' ? 'selected' : ''}>Other (no coverage checklist)</option></select></label>
         <label class="f"><span>Classification</span><select data-f="classification" ${dis()}>${['Public', 'Internal', 'Confidential', 'Restricted'].map((c) => html`<option ${c === p.classification ? 'selected' : ''}>${c}</option>`)}</select></label>
         <label class="f"><span>Effective date</span><input type="date" data-f="effective_date" value="${p.effective_date || ''}" ${ro()}></label>
         <label class="f"><span>Review cycle</span><select data-f="review_cycle_months" ${dis()}>${[3, 6, 12, 18, 24, 36].map((m) => html`<option value="${m}" ${m === Number(p.review_cycle_months) ? 'selected' : ''}>${m === 12 ? 'Annually (12 months)' : `${m} months`}</option>`)}</select></label>

@@ -275,6 +275,8 @@ let addedSample = false;
 for (const t of SAMPLE_TABLES) {
   try { db.exec(`ALTER TABLE ${t} ADD COLUMN sample INTEGER NOT NULL DEFAULT 0`); addedSample = true; } catch { /* column exists */ }
 }
+// The policy type chosen at creation drives the review's coverage checklist (null = detect from name).
+try { db.exec('ALTER TABLE policies ADD COLUMN policy_type TEXT'); } catch { /* column exists */ }
 if (addedSample) {
   // Backfill: sample content was inserted in the same transaction that created the workspace.
   for (const t of SAMPLE_TABLES) {

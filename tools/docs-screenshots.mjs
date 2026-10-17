@@ -190,7 +190,8 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await go('#/policies', '[data-tour=policy-table]');
   await shot('08-policies');
   await click('#new'); await waitFor('#np'); await sleep(400);
-  await fill('#np [name=title]', 'Encryption Policy');
+  await evaluate(`(() => { const s = document.querySelector('#np [name=type]'); s.value = 'data-classification'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await sleep(200);
   await shot('09-new-policy', '.modal', 20);
   await closeModals(); await sleep(300);
   await go('#/templates', '.tpl');

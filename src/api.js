@@ -8,7 +8,7 @@ import { relyingParty, issueChallenge, consumeChallenge, verifyRegistration, ver
 import { audit, verifyChain } from './audit.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
-import { lintPolicy, reviewPolicy, metricSummary, riskLevel } from '../public/js/lint.js';
+import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
 import {
   HttpError, bad, today, nowIso, addMonths, addDays, parseJson, newId,
   str, int, num, date, oneOf, idList, safeLocation,
@@ -380,7 +380,7 @@ route('GET', '/api/meta', R.ANY, (ctx) => {
     templates: isEmployee ? [] : TEMPLATES.map((t) => {
       const fws = new Set();
       t.statements.forEach(([, refs]) => refs.forEach((r) => fws.add(r.split(':')[0])));
-      return { key: t.key, title: t.title, summary: t.summary, statements: t.statements.length, frameworks: [...fws] };
+      return { key: t.key, type: t.type, title: t.title, summary: t.summary, statements: t.statements.length, frameworks: [...fws] };
     }),
   };
 });
@@ -511,12 +511,14 @@ route('GET', '/api/policies', R.ANY, (ctx) => {
 route('POST', '/api/policies', R.WRITE, (ctx) => {
   const title = str(ctx.body.title, { name: 'Policy name', max: 200 });
   const owner = str(ctx.body.owner, { name: 'Owner', max: 200 });
+  let policyType = policyTypeOf(ctx.body.policy_type);
   let base;
   if (ctx.body.template) {
     // A template is a deliberate choice: its wording is copied in for the author to tailor.
     const t = TEMPLATES.find((x) => x.key === ctx.body.template);
     if (!t) throw bad('Unknown template');
     base = templateToPolicy(t);
+    policyType = t.type;
     if (title) base.title = title;
     if (owner) base.owner = owner;
   } else {
@@ -525,9 +527,9 @@ route('POST', '/api/policies', R.WRITE, (ctx) => {
     base = { title, owner, purpose: '', scope: '', statements: [{ id: newId(), text: '', controls: [] }], roles: [{ role: '', responsibility: '' }], enforcement: '' };
   }
   const code = nextCode('policies', 'POL', ctx.user.org_id);
-  const r = run(`INSERT INTO policies(org_id, code, title, owner, purpose, scope, statements, roles, enforcement, created_by, updated_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?)`, ctx.user.org_id, code, base.title, base.owner, base.purpose, base.scope,
-    JSON.stringify(base.statements), JSON.stringify(base.roles), base.enforcement, ctx.user.id, ctx.user.id);
+  const r = run(`INSERT INTO policies(org_id, code, title, owner, purpose, scope, statements, roles, enforcement, created_by, updated_by, policy_type)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, ctx.user.org_id, code, base.title, base.owner, base.purpose, base.scope,
+    JSON.stringify(base.statements), JSON.stringify(base.roles), base.enforcement, ctx.user.id, ctx.user.id, policyType);
   const id = Number(r.lastInsertRowid);
   audit(ctx.actor, 'policy.created', 'policy', id, { code, template: ctx.body.template || null });
   return { id };
@@ -554,6 +556,13 @@ route('GET', '/api/policies/:id/revisions/:rid', R.READ, (ctx) => {
   return { ...r, snapshot: parseJson(r.snapshot, {}) };
 });
 
+// '' / null = detect the type from the policy name; 'other' = no coverage checklist.
+const POLICY_TYPE_KEYS = POLICY_TYPE_OPTIONS.map((t) => t.key);
+function policyTypeOf(v) {
+  if (v == null || v === '') return null;
+  return oneOf(v, [...POLICY_TYPE_KEYS, 'other'], { name: 'Policy type' });
+}
+
 function validatePolicyContent(b, org) {
   const cmap = controlsMap(org);
   const validControls = (ids) => idList(ids, { name: 'Controls' }).filter((id) => cmap.has(id));
@@ -576,6 +585,7 @@ function validatePolicyContent(b, org) {
     enforcement: str(b.enforcement, { name: 'Compliance & Enforcement', max: 5000 }),
     ref_controls: validControls(b.ref_controls || []),
     related_docs: str(b.related_docs, { name: 'Related documents', max: 2000 }),
+    policy_type: policyTypeOf(b.policy_type),
   };
 }
 
@@ -587,9 +597,9 @@ route('PUT', '/api/policies/:id', R.WRITE, (ctx) => {
   const next = v.effective_date ? addMonths(v.effective_date, v.review_cycle_months) : null;
   const ts = nowIso();
   run(`UPDATE policies SET title=?, owner=?, classification=?, effective_date=?, review_cycle_months=?, next_review_date=?, purpose=?, scope=?,
-       statements=?, roles=?, enforcement=?, ref_controls=?, related_docs=?, updated_by=?, updated_at=? WHERE id=?`,
+       statements=?, roles=?, enforcement=?, ref_controls=?, related_docs=?, policy_type=?, updated_by=?, updated_at=? WHERE id=?`,
     v.title, v.owner, v.classification, v.effective_date, v.review_cycle_months, next, v.purpose, v.scope,
-    JSON.stringify(v.statements), JSON.stringify(v.roles), v.enforcement, JSON.stringify(v.ref_controls), v.related_docs, ctx.user.id, ts, p.id);
+    JSON.stringify(v.statements), JSON.stringify(v.roles), v.enforcement, JSON.stringify(v.ref_controls), v.related_docs, v.policy_type, ctx.user.id, ts, p.id);
   audit(ctx.actor, 'policy.updated', 'policy', p.id, { code: p.code, statements: v.statements.length });
   return policyDetail(loadPolicy(p.id, p.org_id));
 });
@@ -624,7 +634,7 @@ route('POST', '/api/policies/:id/approve', R.APPROVE, (ctx) => {
   const [maj, min] = p.version.split('.').map(Number);
   const version = p.version === '0.0' ? '1.0' : p.pending_change_type === 'major' ? `${maj + 1}.0` : `${maj}.${min + 1}`;
   const ts = nowIso();
-  const snapshot = { title: p.title, owner: p.owner, classification: p.classification, effective_date: p.effective_date, review_cycle_months: p.review_cycle_months, next_review_date: p.next_review_date, purpose: p.purpose, scope: p.scope, statements: p.statements, roles: p.roles, enforcement: p.enforcement, ref_controls: p.ref_controls, related_docs: p.related_docs, version };
+  const snapshot = { title: p.title, owner: p.owner, classification: p.classification, effective_date: p.effective_date, review_cycle_months: p.review_cycle_months, next_review_date: p.next_review_date, purpose: p.purpose, scope: p.scope, statements: p.statements, roles: p.roles, enforcement: p.enforcement, ref_controls: p.ref_controls, related_docs: p.related_docs, policy_type: p.policy_type, version };
   tx(() => {
     run(`UPDATE policies SET status='approved', version=?, approved_by=?, approved_at=?, review_note=NULL, updated_at=? WHERE id=?`, version, ctx.user.id, ts, ts, p.id);
     run(`INSERT INTO policy_revisions(policy_id, version, change_type, change_summary, author_id, approver_id, snapshot, created_at) VALUES (?,?,?,?,?,?,?,?)`,

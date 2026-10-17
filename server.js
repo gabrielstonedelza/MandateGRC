@@ -70,7 +70,10 @@ async function handleApi(req, res, url, ip, secure) {
     const origin = req.headers.origin;
     const expected = ORIGIN || `${secure ? 'https' : 'http'}://${req.headers.host}`;
     if (origin && origin !== expected) throw new HttpError(403, 'Cross-origin request blocked');
-    if (!/^application\/json\b/i.test(req.headers['content-type'] || '')) throw new HttpError(415, 'Content-Type must be application/json');
+    // Requests with a body must send JSON. Body-less writes (e.g. DELETE) are still protected by the
+    // Origin check above and the CSRF token below.
+    const hasBody = Number(req.headers['content-length'] || 0) > 0 || !!req.headers['transfer-encoding'];
+    if (hasBody && !/^application\/json\b/i.test(req.headers['content-type'] || '')) throw new HttpError(415, 'Content-Type must be application/json');
   }
 
   const token = parseCookies(req.headers.cookie)[COOKIE_NAME];

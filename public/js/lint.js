@@ -296,9 +296,13 @@ export function extractMetrics(statements) {
 
 const display = (b, v) => (b.kind === 'duration' ? formatHours(v) : b.kind === 'version' ? `TLS ${v}` : b.kind === 'bits' ? `AES-${v}` : String(v));
 
+// An explicitly chosen type wins; 'other' means "no checklist"; otherwise detect from the name.
 export function detectPolicyType(p) {
+  if (p.policy_type === 'other') return null;
+  if (p.policy_type) return POLICY_TYPES.find((t) => t.key === p.policy_type) || null;
   return POLICY_TYPES.find((t) => t.detect.test(p.title || '')) || null;
 }
+export const POLICY_TYPE_OPTIONS = POLICY_TYPES.map((t) => ({ key: t.key, name: t.name, topics: t.requirements.map((r) => r.topic) }));
 
 function resolveRefs(refs, controlsById) {
   if (!controlsById) return [];
