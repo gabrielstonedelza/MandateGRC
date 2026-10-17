@@ -576,3 +576,17 @@ table.t { width: 100%; border-collapse: collapse; }
 .doc .doc-review h2 { border-bottom: 0; }
 @media print { .doc .doc-review { break-before: page; } }
 .notice > svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+
+/* ---------- New policy dialog ---------- */
+.np-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.np-opt { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: start; padding: 14px; border: 1px solid var(--border-2); border-radius: 10px; background: var(--bg-2); cursor: pointer; transition: border-color .15s, background .15s; }
+.np-opt:hover { border-color: #3c4a60; }
+.np-opt:has(input:checked) { border-color: var(--gold); background: rgba(226, 180, 87, .06); }
+.np-opt input { width: auto; height: auto; margin-top: 3px; accent-color: var(--gold); }
+.np-opt b { display: block; color: var(--text); }
+.np-opt small { color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
+.np-ic { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-3); color: var(--gold); }
+.np-ic svg { width: 16px; height: 16px; }
+.sample-banner { align-items: center; }
+.sample-banner .tag { vertical-align: 1px; }
+@media (max-width: 700px) { .np-choice { grid-template-columns: 1fr; } }

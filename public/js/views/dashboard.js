@@ -1,5 +1,6 @@
 import { html, mount, GET, ring, ago, money, icon, can, on, $ } from '../core.js';
 import { heatMap } from './shared.js';
+import { newPolicyDialog, sampleBanner, clearSampleData } from './policies.js';
 
 const PART_LABELS = {
   policyQuality: ['Policy quality', 'Average linter score of active policies'],
@@ -18,10 +19,11 @@ export async function dashboardView(el) {
     <div class="page-head">
       <div><h1>GRC Posture</h1><div class="sub">One view of governance, risk and compliance health, with the actions that move it.</div></div>
       <div class="actions">
-        ${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} From template</a><a class="btn primary" href="#/policies">${icon('plus')} New policy</a>` : ''}
+        ${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} Template library</a><button class="btn primary" id="new-policy">${icon('plus')} New policy</button>` : ''}
       </div>
     </div>
 
+    ${sampleBanner()}
     <div class="grid g3">
       <div class="card span2">
         <div class="posture">
@@ -87,6 +89,8 @@ export async function dashboardView(el) {
   `);
 
   draw();
+  on(el, 'click', '#new-policy', () => newPolicyDialog());
+  on(el, 'click', '[data-clear-sample]', () => clearSampleData(() => window.dispatchEvent(new HashChangeEvent('hashchange'))));
   on(el, 'click', '[data-heat]', (e, b) => { heatMode = b.dataset.heat; draw(); });
   on(el, 'click', '#more', () => {
     mount($('#queue'), html`${d.actions.map((a) => html`<li><span class="sev ${a.severity}"></span><div><a class="t1" href="${a.link}">${a.title}</a><div class="d">${a.detail}</div></div></li>`)}`);

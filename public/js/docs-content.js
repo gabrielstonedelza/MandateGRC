@@ -102,8 +102,8 @@ export const DOCS = [
       { p: 'This is the core workflow in MandateGRC. Follow these steps for any policy: access control, acceptable use, incident response or your own.' },
       { figure: img('08-policies'), caption: 'The Policies page: every policy with its status, version, quality score, mapped frameworks, next review date and acknowledgement progress. Use the tabs to filter by status.' },
       { steps: [
-        { t: 'Start a draft', d: 'Go to <b>Policies</b> and click <b>New policy</b>. Give it a clear name ending in "Policy", for example <i>Encryption Policy</i>, and click <b>Create draft</b>. The draft opens with all eight sections and the four standard roles already in place.', img: img('09-new-policy') },
-        { t: 'Or start from a template', d: 'Prefer proven wording? Open <b>Template Library</b> and click <b>Use template</b>. Templates already pass every linter rule and are mapped to several frameworks; you only tailor them. See <a href="#/docs/policy-library">Policy library</a> for what each one covers.', img: img('10-templates') },
+        { t: 'Start a draft', d: 'Click <b>New policy</b> (on the dashboard or the Policies page) and choose <b>Blank policy</b>. Give it a clear name ending in "Policy", for example <i>Encryption Policy</i>, optionally add the owner, and click <b>Create draft</b>. A blank draft is genuinely empty: nothing is pre-filled except what you typed.', img: img('09-new-policy') },
+        { t: 'Or start from a template', d: 'Prefer proven wording? In the same dialog choose <b>From a template</b>, or open <b>Template Library</b> and click <b>Use template</b>. You get a copy of professionally written statements, already mapped to frameworks, which you then tailor. See <a href="#/docs/policy-library">Policy library</a> for what each one covers.', img: img('10-templates') },
         { t: 'Get to know the editor', d: 'The editor has three columns. <b>Left:</b> the anatomy, showing your score, grade and a status dot per section (red is blocking, yellow is a warning, green ✓ is done). Click a section to jump to it. <b>Middle:</b> the eight sections. <b>Right:</b> the live linter. Click any issue to jump to the exact place.', img: img('11-editor') },
         { t: '1 · Fill in the Header', d: 'Set the <b>Policy owner</b> (an accountable role such as "Chief Information Security Officer"), the <b>Classification</b>, the <b>Effective date</b> and the <b>Review cycle</b>; annual is the professional standard. <b>Version</b> and <b>Approval</b> are filled in automatically by the workflow, so you never type them.', img: img('12-header') },
         { t: '2 · Write the Purpose', d: 'One paragraph explaining <b>why</b> the policy exists, for example: "This policy establishes … in order to protect …". The counter under the box shows words and paragraphs.', img: img('13-purpose') },
@@ -388,6 +388,7 @@ export const DOCS = [
         '<b>Organization name</b>: shown across the app and on policy documents.',
         '<b>Risk appetite</b>: the maximum acceptable residual score (1–25). Risks above it are flagged. 9 means "nothing above Medium".',
         '<b>Session idle timeout</b>: minutes of inactivity before users are signed out (5–240).',
+        '<b>Sample data</b>: if you created the workspace with sample data, the example items are marked <b>Sample</b>. Click <b>Remove sample data</b> (here, or in the banner on the dashboard and Policies page) to delete them all at once. Your own work is never touched.',
       ] },
     ],
   },

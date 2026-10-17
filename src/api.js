@@ -374,6 +374,7 @@ route('GET', '/api/meta', R.ANY, (ctx) => {
   return {
     org: orgSettings(ctx.user.org_id).name,
     risk_appetite: orgSettings(ctx.user.org_id).risk_appetite,
+    sample_count: ['policies', 'risks', 'exceptions', 'evidence'].reduce((n, t) => n + get(`SELECT COUNT(*) n FROM ${t} WHERE org_id = ? AND sample = 1`, ctx.user.org_id).n, 0),
     frameworks: visibleFrameworks(ctx.user.org_id).map(({ id, code, name, version, description, custom }) => ({ id, code, name, version, description, custom })),
     controls: isEmployee ? [] : [...controlsMap(ctx.user.org_id).values()],
     templates: isEmployee ? [] : TEMPLATES.map((t) => {
@@ -501,25 +502,27 @@ route('GET', '/api/policies', R.ANY, (ctx) => {
     return {
       id: p.id, code: p.code, title: p.title, owner: p.owner, version: p.version, status: p.status,
       classification: p.classification, effective_date: p.effective_date, next_review_date: p.next_review_date,
-      updated_at: p.updated_at, statements: p.statements.length, score: l.score, grade: l.grade, errors: l.errors, warnings: l.warnings,
+      updated_at: p.updated_at, statements: p.statements.length, sample: !!p.sample, score: l.score, grade: l.grade, errors: l.errors, warnings: l.warnings,
       frameworks: [...fws], attestation: p.status === 'published' ? attestationStats(p.id, p.version, p.org_id) : null,
     };
   });
 });
 
 route('POST', '/api/policies', R.WRITE, (ctx) => {
+  const title = str(ctx.body.title, { name: 'Policy name', max: 200 });
+  const owner = str(ctx.body.owner, { name: 'Owner', max: 200 });
   let base;
   if (ctx.body.template) {
+    // A template is a deliberate choice: its wording is copied in for the author to tailor.
     const t = TEMPLATES.find((x) => x.key === ctx.body.template);
     if (!t) throw bad('Unknown template');
     base = templateToPolicy(t);
+    if (title) base.title = title;
+    if (owner) base.owner = owner;
   } else {
-    base = {
-      title: str(ctx.body.title, { name: 'Title', max: 200 }) || 'Untitled Policy', owner: '', purpose: '', scope: '',
-      statements: [{ id: newId(), text: '', controls: [] }],
-      roles: ['Policy Owner', 'Custodian', 'Users', 'Management'].map((role) => ({ role, responsibility: '' })),
-      enforcement: '',
-    };
+    // A blank policy is genuinely empty: only the name and owner the author typed.
+    if (!title) throw bad('Give the policy a name.');
+    base = { title, owner, purpose: '', scope: '', statements: [{ id: newId(), text: '', controls: [] }], roles: [{ role: '', responsibility: '' }], enforcement: '' };
   }
   const code = nextCode('policies', 'POL', ctx.user.org_id);
   const r = run(`INSERT INTO policies(org_id, code, title, owner, purpose, scope, statements, roles, enforcement, created_by, updated_by)
@@ -1027,6 +1030,27 @@ route('DELETE', '/api/users/:id/passkeys/:cid', R.ADMIN, (ctx) => {
   destroyUserSessions(id);
   audit(ctx.actor, 'user.passkey_revoked', 'user', id, { label: c.label });
   return { ok: true };
+});
+
+// Removes the demo content seeded when the workspace was created. The user's own work is untouched.
+route('POST', '/api/workspace/clear-sample', R.ADMIN, (ctx) => {
+  const org = ctx.user.org_id;
+  const removed = {};
+  tx(() => {
+    const samplePolicyIds = all('SELECT id FROM policies WHERE org_id = ? AND sample = 1', org).map((r) => r.id);
+    for (const t of ['exceptions', 'evidence', 'risks', 'policies']) removed[t] = run(`DELETE FROM ${t} WHERE org_id = ? AND sample = 1`, org).changes;
+    // Drop links from the user's own risks to sample policies that no longer exist.
+    if (samplePolicyIds.length) {
+      for (const r of all('SELECT id, policy_ids FROM risks WHERE org_id = ?', org)) {
+        const ids = parseJson(r.policy_ids, []);
+        const kept = ids.filter((id) => !samplePolicyIds.includes(id));
+        if (kept.length !== ids.length) run('UPDATE risks SET policy_ids = ? WHERE id = ?', JSON.stringify(kept), r.id);
+      }
+    }
+    removed.demo_users = run("DELETE FROM users WHERE org_id = ? AND username LIKE 'demo-%' AND active = 0 AND id NOT IN (SELECT created_by FROM policies WHERE created_by IS NOT NULL UNION SELECT updated_by FROM policies WHERE updated_by IS NOT NULL UNION SELECT submitted_by FROM policies WHERE submitted_by IS NOT NULL UNION SELECT approved_by FROM policies WHERE approved_by IS NOT NULL)", org).changes;
+  });
+  audit(ctx.actor, 'workspace.sample_data_removed', 'workspace', org, removed);
+  return removed;
 });
 
 route('GET', '/api/settings', R.ADMIN, (ctx) => {

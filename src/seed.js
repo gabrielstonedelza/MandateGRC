@@ -75,6 +75,8 @@ export function seedSampleData(orgId, adminId) {
   const analystId = mkDemo('analyst', 'Ama Mensah (demo)', 'analyst');
   const approverId = mkDemo('approver', 'Kwame Owusu, CISO (demo)', 'approver');
   const insertPolicy_ = (p, extra) => insertPolicy(orgId, p, extra);
+  // Everything created here is demo content: flag it so it can be labelled and removed later.
+  const flagSample = () => { for (const t of ['policies', 'risks', 'exceptions', 'evidence']) run(`UPDATE ${t} SET sample = 1 WHERE org_id = ?`, orgId); };
 
   {
     const t = Object.fromEntries(TEMPLATES.map((x) => [x.key, x]));
@@ -173,4 +175,5 @@ export function seedSampleData(orgId, adminId) {
         orgId, cid, e[1], e[2], e[3], e[4], addDays(today(), e[5]), e[6], adminId);
     }
   }
+  flagSample();
 }

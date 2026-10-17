@@ -268,6 +268,21 @@ CREATE INDEX IF NOT EXISTS idx_invites_org ON invites(org_id);
 PRAGMA user_version = ${SCHEMA_VERSION};
 `);
 
+// ---- Migrations for databases created by earlier v2 builds
+// `sample` marks the demo content seeded into a new workspace, so it can be labelled and removed.
+const SAMPLE_TABLES = ['policies', 'risks', 'exceptions', 'evidence'];
+let addedSample = false;
+for (const t of SAMPLE_TABLES) {
+  try { db.exec(`ALTER TABLE ${t} ADD COLUMN sample INTEGER NOT NULL DEFAULT 0`); addedSample = true; } catch { /* column exists */ }
+}
+if (addedSample) {
+  // Backfill: sample content was inserted in the same transaction that created the workspace.
+  for (const t of SAMPLE_TABLES) {
+    db.exec(`UPDATE ${t} SET sample = 1 WHERE org_id IN (SELECT org_id FROM users WHERE username LIKE 'demo-%')
+      AND julianday(created_at) - julianday((SELECT created_at FROM orgs WHERE orgs.id = ${t}.org_id)) < 10.0 / 86400`);
+  }
+}
+
 try { fs.chmodSync(DB_PATH, 0o600); } catch { /* best effort */ }
 
 export const all = (sql, ...p) => db.prepare(sql).all(...p);

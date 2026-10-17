@@ -24,7 +24,7 @@ export async function policiesView(el) {
       <tbody>${rows.map((p) => {
         const overdue = p.status === 'published' && p.next_review_date && p.next_review_date < todayStr();
         return html`<tr class="clickable" data-href="#/policies/${p.id}">
-          <td class="title-cell"><b>${p.title}</b><small>${p.code} · ${p.owner || 'No owner'} · ${p.statements} statements</small></td>
+          <td class="title-cell"><b>${p.title}${p.sample ? html` <span class="tag">Sample</span>` : ''}</b><small>${p.code} · ${p.owner || 'No owner'} · ${p.statements} statements</small></td>
           <td>${pill(p.status)}</td>
           <td class="mono">${p.version === '0.0' ? '—' : 'v' + p.version}</td>
           <td><div class="row">${ring(p.score, { size: 'sm' })}<span class="small dim">${p.errors ? html`<b class="nowrap" title="Blocking issues">${p.errors} blocking</b><br>` : ''}${p.warnings} warnings</span></div></td>
@@ -40,6 +40,7 @@ export async function policiesView(el) {
       <div><h1>Policies</h1><div class="sub">Every policy is built on the eight-part anatomy and scored by the MandateGRC linter. Blocking issues must be cleared before review.</div></div>
       <div class="actions">${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} Template library</a><button class="btn primary" id="new">${icon('plus')} New policy</button>` : ''}</div>
     </div>
+    ${sampleBanner()}
     <div class="card" data-tour="policy-table">
       <div class="card-h">
         <div class="tabs compact">${STATUS_TABS.map(([k, l]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${l} <span class="muted">${k === 'all' ? list.length : list.filter((p) => p.status === k).length}</span></button>`)}</div>
@@ -51,7 +52,8 @@ export async function policiesView(el) {
   on(el, 'click', '[data-tab]', (e, b) => { tab = b.dataset.tab; $$('[data-tab]', el).forEach((x) => x.classList.toggle('on', x === b)); draw(); });
   $('#q', el).addEventListener('input', (e) => { q = e.target.value.toLowerCase(); draw(); });
   on(el, 'click', 'tr[data-href]', (e, tr) => { location.hash = tr.dataset.href; });
-  $('#new', el)?.addEventListener('click', newPolicyDialog);
+  $('#new', el)?.addEventListener('click', () => newPolicyDialog());
+  on(el, 'click', '[data-clear-sample]', () => clearSampleData(() => window.dispatchEvent(new HashChangeEvent('hashchange'))));
 }
 
 function employeeList(el, list) {
@@ -62,25 +64,84 @@ function employeeList(el, list) {
   on(el, 'click', 'tr[data-href]', (e, tr) => { location.hash = tr.dataset.href; });
 }
 
-function newPolicyDialog() {
+// New policy: an explicit choice between a blank draft and a prefilled template.
+export function newPolicyDialog({ template = null } = {}) {
+  const templates = state.meta.templates || [];
+  let mode = template ? 'template' : 'blank';
+  let tplKey = template || templates[0]?.key;
+  const tplOf = (k) => templates.find((t) => t.key === k);
   modal({
-    title: 'New policy',
-    body: html`<form id="np" class="stack">
-      <label class="f"><span>Policy name</span><input name="title" required maxlength="200" placeholder="e.g. Encryption Policy" autofocus></label>
-      <div class="notice info">The draft opens with the full anatomy scaffolded: all 8 sections and the four standard roles. To start from proven wording instead, use the <a href="#/templates" data-close>Template library</a>.</div>
+    title: 'New policy', wide: true,
+    body: html`<form id="np" class="stack" novalidate>
+      <div class="np-choice" role="radiogroup" aria-label="How to start">
+        <label class="np-opt"><input type="radio" name="mode" value="blank" ${mode === 'blank' ? 'checked' : ''}>
+          <span class="np-ic">${icon('policy')}</span><span><b>Blank policy</b><small>Start from scratch with your own wording. Every section is empty and the linter guides you.</small></span></label>
+        <label class="np-opt"><input type="radio" name="mode" value="template" ${mode === 'template' ? 'checked' : ''}>
+          <span class="np-ic">${icon('template')}</span><span><b>From a template</b><small>Start from professionally written statements, already mapped to frameworks, then tailor them.</small></span></label>
+      </div>
+      <div id="np-tpl" class="${mode === 'template' ? '' : 'hidden'}">
+        <label class="f"><span>Template</span><select name="tpl">${templates.map((t) => html`<option value="${t.key}" ${t.key === tplKey ? 'selected' : ''}>${t.title}</option>`)}</select></label>
+        <div class="muted small mt" id="np-tpl-sum"></div>
+      </div>
+      <div class="form-grid">
+        <label class="f"><span>Policy name</span><input name="title" maxlength="200" placeholder="e.g. Encryption Policy" autofocus></label>
+        <label class="f"><span>Policy owner <em>(optional, a role is best)</em></span><input name="owner" maxlength="200" placeholder="e.g. Chief Information Security Officer"></label>
+      </div>
+      <div class="notice info small" id="np-note"></div>
     </form>`,
     footer: html`<button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-create>Create draft</button>`,
     onMount: ({ el, close }) => {
+      const form = $('#np', el);
+      const titleIn = form.elements.namedItem('title');
+      let autoTitle = true;
+      titleIn.addEventListener('input', () => { autoTitle = !titleIn.value.trim(); });
+      const sync = () => {
+        mode = form.querySelector('[name=mode]:checked').value;
+        tplKey = form.elements.namedItem('tpl')?.value || tplKey;
+        $('#np-tpl', el).classList.toggle('hidden', mode !== 'template');
+        const t = tplOf(tplKey);
+        $('#np-tpl-sum', el).textContent = t ? `${t.summary} ${t.statements} statements · maps to ${t.frameworks.join(', ')}.` : '';
+        if (mode === 'template' && autoTitle && t) titleIn.value = t.title;
+        if (mode === 'blank' && autoTitle) titleIn.value = '';
+        $('#np-note', el).textContent = mode === 'blank'
+          ? 'Your draft opens with all 8 sections empty. Nothing is pre-filled except the name and owner you enter here.'
+          : 'The draft is a copy of the template. Review every statement, and change the owner, numbers and scope to fit your organization before submitting.';
+      };
+      sync();
+      on(el, 'change', '[name=mode], [name=tpl]', sync);
       const go = async (e) => {
         e?.preventDefault();
-        const title = $('[name=title]', el).value.trim();
-        if (!title) return toast('Give the policy a name.', 'err');
-        try { const r = await POST('/api/policies', { title }); close(); location.hash = `#/policies/${r.id}`; } catch (err) { fail(err); }
+        const title = titleIn.value.trim();
+        const owner = form.elements.namedItem('owner').value.trim();
+        if (mode === 'blank' && !title) { titleIn.focus(); return toast('Give the policy a name.', 'err'); }
+        try {
+          const r = await POST('/api/policies', mode === 'template' ? { template: tplKey, title, owner } : { title, owner });
+          close();
+          toast(mode === 'template' ? 'Draft created from the template. Tailor it to your organization.' : 'Blank draft created.');
+          location.hash = `#/policies/${r.id}`;
+        } catch (err) { fail(err); }
       };
       on(el, 'click', '[data-create]', go);
-      $('#np', el).addEventListener('submit', go);
+      form.addEventListener('submit', go);
     },
   });
+}
+
+// Banner offering to remove the demo content seeded into a new workspace.
+export function sampleBanner() {
+  const n = state.meta.sample_count || 0;
+  if (!n || !can.admin()) return '';
+  return html`<div class="notice info sample-banner"><div><b>This workspace contains sample data</b> (${n} example policies, risks, exceptions and evidence items, marked <span class="tag">Sample</span>). Explore them, then remove them when you're ready to start on your own.</div>
+    <button class="btn sm right" data-clear-sample>Remove sample data</button></div>`;
+}
+export async function clearSampleData(after) {
+  if (!(await confirmDialog({ title: 'Remove all sample data?', message: 'This deletes the example policies, risks, exceptions and evidence created with your workspace, and the two inactive demo colleagues. Anything you created yourself is kept. This cannot be undone.', confirm: 'Remove sample data', danger: true }))) return;
+  try {
+    const r = await POST('/api/workspace/clear-sample');
+    state.meta = await GET('/api/meta');
+    toast(`Removed ${r.policies} policies, ${r.risks} risks, ${r.exceptions} exceptions and ${r.evidence} evidence items.`);
+    await after?.();
+  } catch (e) { fail(e); }
 }
 
 // =====================================================================
@@ -89,16 +150,15 @@ function newPolicyDialog() {
 export async function templatesView(el) {
   const t = state.meta.templates;
   mount(el, html`
-    <div class="page-head"><div><h1>Template library</h1><div class="sub">Professionally worded policies that already pass the linter: mandatory language, measurable criteria, and statement-level mappings across frameworks. Use one as a starting point, then tailor it to your organization.</div></div></div>
+    <div class="page-head"><div><h1>Template library</h1><div class="sub">Templates are <b>pre-written</b>: professionally worded policies that already pass the review, with statement-level framework mappings. Using one gives you a copy to tailor to your organization. Prefer your own words? Start a blank policy.</div></div>
+      <div class="actions"><button class="btn" id="blank">${icon('plus')} Start a blank policy</button></div></div>
     <div class="grid g3">${t.map((x) => html`<div class="card tpl">
       <h3>${x.title}</h3><div class="dim">${x.summary}</div>
       <div class="row">${x.frameworks.map((f) => html`<span class="tag">${f}</span>`)}</div>
       <div class="row"><span class="muted small">${x.statements} statements · 8/8 sections</span><button class="btn sm primary right" data-use="${x.key}">Use template</button></div>
     </div>`)}</div>`);
-  on(el, 'click', '[data-use]', async (e, b) => {
-    b.disabled = true;
-    try { const r = await POST('/api/policies', { template: b.dataset.use }); toast('Draft created from template.'); location.hash = `#/policies/${r.id}`; } catch (err) { fail(err); b.disabled = false; }
-  });
+  on(el, 'click', '[data-use]', (e, b) => newPolicyDialog({ template: b.dataset.use }));
+  on(el, 'click', '#blank', () => newPolicyDialog());
 }
 
 // =====================================================================

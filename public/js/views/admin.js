@@ -127,6 +127,8 @@ export async function settingsView(el) {
       <label class="f"><span>Risk appetite <em>(max acceptable residual score, 1–25)</em></span><input type="number" name="risk_appetite" min="1" max="25" value="${s.risk_appetite}"></label>
       <label class="f"><span>Session idle timeout <em>(minutes)</em></span><input type="number" name="session_idle_minutes" min="5" max="240" value="${s.session_idle_minutes}"></label>
     </div><div class="modal-f"><button class="btn primary" type="submit">Save settings</button></div></form>
+    ${(state.meta.sample_count || 0) ? html`<div class="card"><div class="card-h"><h3>Sample data</h3></div><div class="card-b row">
+      <span class="dim">This workspace still contains ${state.meta.sample_count} sample items created with it.</span><button class="btn danger sm right" id="clear-sample">Remove sample data</button></div></div>` : ''}
     <div class="card"><div class="card-h"><h3>Security & privacy posture of this deployment</h3></div><div class="card-b">
       <ul class="dim">
         <li>Passwordless: sign-in uses passkeys (WebAuthn / FIDO2) with user verification. Only public keys are stored, and biometrics never leave the device.</li>
@@ -140,6 +142,10 @@ export async function settingsView(el) {
         <li>No third-party runtime dependencies, so there is no npm supply-chain exposure.</li>
       </ul>
     </div></div>`);
+  $('#clear-sample', el)?.addEventListener('click', async () => {
+    const { clearSampleData } = await import('./policies.js');
+    clearSampleData(() => window.dispatchEvent(new HashChangeEvent('hashchange')));
+  });
   $('#sf', el).addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
