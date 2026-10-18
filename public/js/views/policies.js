@@ -335,7 +335,8 @@ export async function policyEditorView(el, id) {
     mount($('#lint', el), html`
       <div class="card-h"><h3>Policy linter</h3><span class="right small ${l.errors ? '' : 'muted'}">${l.errors ? html`<span class="pill s-error">${l.errors} blocking</span>` : (l.warnings ? html`<span class="pill s-medium">No blocking issues</span>` : html`<span class="pill s-ok">${p.status === 'draft' ? 'Ready for review' : 'Passes all rules'}</span>`)}</span></div>
       ${l.issues.length ? html`<div class="lint-hint muted small">Click an issue to jump to it in the policy.</div>` : ''}
-      <div class="list">${l.issues.length ? l.issues.map((i) => html`<button class="item ${i.severity}" data-goto="${i.statementId ? 'st-' + i.statementId : 'sec-' + i.section}">${i.message}${i.tip ? html`<small>${i.tip}</small>` : ''}</button>`) : html`<div class="empty"><b>Clean</b>This policy follows every rule.</div>`}</div>
+      <div class="list">${l.issues.length ? l.issues.map((i, k) => html`<div class="item ${i.severity}"><button class="item-go" data-goto="${i.statementId ? 'st-' + i.statementId : 'sec-' + i.section}">${i.message}${i.tip ? html`<small>${i.tip}</small>` : ''}</button>
+        ${i.fixes?.length && editable() ? html`<div class="fix-row">${i.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-lfix="${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}</div>`) : html`<div class="empty"><b>Clean</b>This policy follows every rule.</div>`}</div>
       <div class="rules"><b>Golden rules</b><br>1. Use “must” and “shall”, never “should” or “we try to”.<br>2. Keep statements specific and measurable.<br>3. Map each policy to a framework.</div>`);
     // Per-statement findings with one-click fixes.
     p.statements.forEach((s) => {
@@ -343,7 +344,8 @@ export async function policyEditorView(el, id) {
       if (!box) return;
       const f = s.text ? analyzeStatement(s.text) : [];
       if (s.text && !(s.controls || []).length) f.push({ severity: 'warning', message: 'Not mapped to any framework control.', tip: 'Use “Map controls” to link it to ISO 27001, NIST, SOC 2 …' });
-      mount(box, html`${f.map((x, k) => html`<div class="finding ${x.severity}"><div><b>${x.message}</b> <span class="tip">${x.tip || ''}</span></div>${x.fix && editable() ? html`<button class="btn xs" data-fix="${s.id}:${k}">Fix: “${x.fix.to}”</button>` : ''}</div>`)}`);
+      mount(box, html`${f.map((x, k) => html`<div class="finding ${x.severity}"><div><b>${x.message}</b> <span class="tip">${x.tip || ''}</span>
+        ${x.fixes?.length && editable() ? html`<div class="fix-row"><span class="muted">Suggested:</span>${x.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-fix="${s.id}:${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}</div></div>`)}`);
       box._findings = f;
     });
     const words = (p.purpose || '').trim().split(/\s+/).filter(Boolean).length;
@@ -448,15 +450,24 @@ export async function policyEditorView(el, id) {
   });
   on(el, 'click', '[data-unref]', (e, b) => { p.ref_controls = p.ref_controls.filter((c) => c !== Number(b.dataset.unref)); restructure(); });
   on(el, 'click', '[data-fix]', (e, b) => {
-    const [sid, k] = b.dataset.fix.split(':');
+    const [sid, k, j] = b.dataset.fix.split(':');
     const box = el.querySelector(`[data-findings="${sid}"]`);
-    const f = box._findings[Number(k)];
+    applyStatementFix(sid, box._findings[Number(k)].fixes[Number(j) || 0]);
+  });
+  on(el, 'click', '[data-lfix]', (e, b) => {
+    const [k, j] = b.dataset.lfix.split(':').map(Number);
+    const issue = lastReview?.lint.issues[k];
+    if (issue?.fixes?.[j]) applyStatementFix(issue.statementId, issue.fixes[j]);
+  });
+  function applyStatementFix(sid, fx) {
     const s = p.statements.find((x) => x.id === sid);
-    s.text = applyFix(s.text, f.fix);
+    if (!s || !fx || !editable()) return;
+    s.text = applyFix(s.text, fx);
     const ta = el.querySelector(`[data-stmt="${sid}"]`);
     if (ta) ta.value = s.text;
     refreshLint();
-  });
+    toast(fx.to ? `Replaced with “${fx.to}”.` : 'Removed.');
+  }
   on(el, 'click', '#add-role', () => { p.roles.push({ role: '', responsibility: '' }); restructure(); });
   on(el, 'click', '[data-del-role]', (e, b) => { p.roles.splice(Number(b.dataset.delRole), 1); restructure(); });
   on(el, 'click', '#std-roles', () => {
@@ -562,6 +573,10 @@ function scoreBars(rv) {
     return html`<div class="rv-score"><span>${c.label}</span><div class="bar"><i class="${v == null ? '' : v >= 85 ? 'ok' : v >= 60 ? 'warn' : 'bad'}" data-w="${v ?? 0}"></i></div><b>${v == null ? 'n/a' : v}</b></div>`;
   })}</div>`;
 }
+
+// Button text for a one-click wording fix: "Use “must”" or "Remove it".
+const fixLabel = (fx) => (fx.to ? (fx.label?.startsWith('“') ? `Use ${fx.label}` : fx.label) : fx.label || 'Remove it');
+const fixTitle = (fx) => (fx.to ? `Replace the flagged words with “${fx.to}”` : 'Delete the flagged words from the statement');
 
 export function reviewCard(rv, { editable = false, openCats = new Set() } = {}) {
   const byCat = (cat) => rv.checklist.filter((c) => c.cat === cat);

@@ -16,33 +16,62 @@ export const SECTIONS = [
   { key: 'history', n: 8, title: 'Revision History', hint: 'Version table' },
 ];
 
-// Words that make a rule optional rather than mandatory.
+// Words that make a rule optional rather than mandatory. Each rule offers one-click
+// replacements (`fixes`): `to: ''` removes the phrase. `fixes` may be a function of the
+// matched text and the whole statement, so suggestions fit the context.
+const REMOVE = (label = 'Remove it') => [{ to: '', label }];
 const NON_MANDATORY = [
-  { re: /\bshould not\b/i, word: 'should not', fix: 'must not' },
-  { re: /\bshould\b/i, word: 'should', fix: 'must' },
-  { re: /\bought to\b/i, word: 'ought to', fix: 'must' },
-  { re: /\b(?:try|tries|attempt|attempts|strive|strives|endeavou?r|endeavou?rs) to\b/i, word: 'try to', tip: 'State the requirement outright with "must" / "shall".' },
-  { re: /\b(?:is|are) (?:encouraged|recommended|advised) to\b/i, word: 'encouraged/recommended', tip: 'Recommendations are guidance, not policy. Use "must" or move to a guideline.' },
-  { re: /\bbest[- ]effort\b/i, word: 'best effort', tip: 'Define the required outcome instead of effort.' },
-  { re: /\bideally\b/i, word: 'ideally', tip: 'State what is required, not what is ideal.' },
-  { re: /\bwe hope\b/i, word: 'we hope', tip: 'Policies mandate; they do not hope.' },
-  { re: /\bmay\b(?! (?:not|only))/i, word: 'may', tip: '"May" is permissive. Use "must" for requirements, or "may only … when …" for controlled permission.' },
+  { re: /\bshould not\b/i, word: 'should not', fixes: [{ to: 'must not' }] },
+  { re: /\bshould\b/i, word: 'should', fixes: [{ to: 'must' }, { to: 'shall' }] },
+  { re: /\bought to\b/i, word: 'ought to', fixes: [{ to: 'must' }] },
+  { re: /\b(?:will |shall |must |should )?(?:try|tries|attempt|attempts|strive|strives|endeavou?r|endeavou?rs|aim|aims) to\b/i, word: 'try to', tip: 'State the requirement outright.', fixes: [{ to: 'must' }] },
+  { re: /\b(?:is|are) (?:encouraged|recommended|advised|expected) to\b/i, word: 'encouraged/recommended', tip: 'Recommendations are guidance, not policy.', fixes: [{ to: 'must' }] },
+  { re: /\b(?:on a )?best[- ]efforts?(?: basis)?\b/i, word: 'best effort', tip: 'Define the required outcome instead of effort.', fixes: REMOVE() },
+  { re: /\bideally,?\s*/i, word: 'ideally', tip: 'State what is required, not what is ideal.', fixes: REMOVE() },
+  { re: /\bwe hope(?: that)?\s*/i, word: 'we hope', tip: 'Policies mandate; they do not hope.', fixes: REMOVE() },
+  { re: /\bmay\b(?! (?:not|only))/i, word: 'may', tip: '"May" is permissive. Use "must" for a requirement, or "may only … when …" for a controlled permission.', fixes: [{ to: 'must' }, { to: 'may only', label: 'may only … (then add the condition)' }] },
 ];
+// Weak verbs that only matter when the statement has no "must"/"shall" at all.
+const WEAK_MANDATE = { re: /\b(?:will|need to|needs to|has to|have to|(?:is|are) required to)\b/i, word: 'will / need to' };
 
+// Context-aware replacements for "adequate", "appropriate" and similar.
+function standardFor(text) {
+  if (/encrypt|cipher|crypto/i.test(text)) return [{ to: 'AES-256' }, { to: 'TLS 1.2 or higher' }];
+  if (/password|passphrase|credential/i.test(text)) return [{ to: 'at least 14-character' }];
+  if (/access|permission|privilege|rights/i.test(text)) return [{ to: 'least-privilege, role-based' }];
+  if (/approv|authori[sz]/i.test(text)) return [{ to: 'documented, written' }];
+  if (/train|awareness/i.test(text)) return [{ to: 'annual' }];
+  if (/log|monitor/i.test(text)) return [{ to: 'centrally collected, tamper-evident' }];
+  if (/backup|retain|retention/i.test(text)) return [{ to: 'encrypted, off-site' }];
+  return [{ to: 'documented and approved' }];
+}
 // Words that cannot be measured or audited.
 const VAGUE = [
-  { re: /\b(?:periodically|regularly|from time to time|routinely|frequently)\b/i, word: 'periodically/regularly', tip: 'Specify a frequency, e.g. "every 90 days" or "quarterly".' },
-  { re: /\b(?:timely|promptly|as soon as possible|asap|quickly|immediately)\b/i, word: 'timely/promptly', tip: 'Specify a deadline, e.g. "within 24 hours".' },
-  { re: /\b(?:reasonable|adequate|sufficient|appropriate|proper|suitable)\b/i, word: 'adequate/appropriate', tip: 'Define the measurable standard (e.g. "AES-256", "14 characters", "TLS 1.2+").' },
-  { re: /\b(?:where possible|if possible|where practical|where feasible|as needed|when necessary|if necessary|as required)\b/i, word: 'where possible', tip: 'Escape clauses make rules unenforceable. Route deviations through the exception process.' },
-  { re: /\b(?:generally|normally|typically|usually|mostly)\b/i, word: 'generally/usually', tip: 'A rule applies or it does not. Remove the qualifier.' },
-  { re: /\b(?:etc\.?|and\/or|and so on)/i, word: 'etc./and-or', tip: 'Enumerate the items explicitly so the rule is testable.' },
-  { re: /\b(?:strong|secure|robust|complex) (?:passwords?|encryption|authentication)\b/i, word: 'strong/secure', tip: 'Define "strong": length, algorithm or standard.' },
+  { re: /\b(?:periodically|regularly|from time to time|routinely|frequently|on a regular basis|occasionally)\b/i, word: 'periodically/regularly', tip: 'Specify a frequency.',
+    fixes: [{ to: 'quarterly' }, { to: 'monthly' }, { to: 'annually' }, { to: 'every 90 days' }] },
+  { re: /\b(?:in a timely (?:manner|fashion)|promptly|as soon as (?:possible|practical|practicable)|asap|quickly|immediately|without delay|without undue delay)\b/i, word: 'timely/promptly', tip: 'Specify a deadline.',
+    fixes: [{ to: 'within 24 hours' }, { to: 'within 1 hour' }, { to: 'within 72 hours' }] },
+  { re: /\btimely\b/i, word: 'timely', tip: 'Specify the deadline, e.g. "within 24 hours of discovery".' },
+  { re: /\b(?<!(?:when|if|where|as) )(?:reasonable|adequate|sufficient|appropriate|appropriately|proper|properly|suitable|necessary)\b/i, word: 'adequate/appropriate', tip: 'Define the measurable standard (e.g. "AES-256", "14 characters", "TLS 1.2+").',
+    fixes: (m, text) => (/ly$/i.test(m) ? REMOVE() : [...standardFor(text), ...REMOVE()]) },
+  { re: /,?\s*\b(?:where possible|if possible|whenever possible|where practical|where practicable|where feasible|as needed|when necessary|if necessary|as required|as appropriate|when appropriate|if appropriate|where appropriate|when needed|if needed)\b,?/i, word: 'where possible', tip: 'Escape clauses make rules unenforceable. Route deviations through the exception process.', fixes: REMOVE() },
+  { re: /\b(?:generally|normally|typically|usually|mostly|in most cases|in principle),?\s*/i, word: 'generally/usually', tip: 'A rule applies or it does not.', fixes: REMOVE() },
+  { re: /,?\s*\b(?:etc\.?|and so on|and so forth)/i, word: 'etc.', tip: 'List the items explicitly so the rule is testable.', fixes: REMOVE('Remove it, then list every item') },
+  { re: /\band\/or\b/i, word: 'and/or', tip: 'Say which one you mean.', fixes: [{ to: 'and' }, { to: 'or' }] },
+  { re: /\b(?:strong|secure|robust|complex|good) (?:passwords?|encryption|authentication)\b/i, word: 'strong/secure', tip: 'Define "strong": length, algorithm or standard.',
+    fixes: (m) => (/password/i.test(m) ? [{ to: 'passwords of at least 14 characters' }] : /encrypt/i.test(m) ? [{ to: 'AES-256 encryption' }] : [{ to: 'multi-factor authentication' }]) },
 ];
 
 const MEASURABLE = /\d|\b(?:annually|yearly|quarterly|monthly|weekly|daily|hourly|every|within|before|prior to|no later than|at least|at most|minimum|maximum|each|all|never|only|unique|before)\b/i;
 const MANDATORY = /\b(?:must|shall)\b/i;
 const PROHIBITION = /\b(?:must not|shall not|must never|shall never|prohibited)\b/i;
+
+// Build the replacement options for a matched phrase. `from` is the regex that applyFix replaces.
+function fixesFor(rule, t) {
+  const m = (t.match(rule.re) || [''])[0];
+  const list = typeof rule.fixes === 'function' ? rule.fixes(m, t) : rule.fixes || [];
+  return list.map((f) => ({ from: rule.re.source, to: f.to, label: f.label || (f.to ? `“${f.to}”` : f.label) }));
+}
 
 export function analyzeStatement(text = '') {
   const t = String(text || '').trim();
@@ -52,13 +81,19 @@ export function analyzeStatement(text = '') {
     return findings;
   }
   if (!MANDATORY.test(t)) {
-    findings.push({ severity: 'error', message: 'No "must" or "shall". Every policy statement has to be mandatory.', tip: 'Rewrite as "[Who] must [do what] [by when / how often]."' });
+    // If a non-mandatory phrase ("should", "will try to") is flagged below, its fix covers this too.
+    const weak = NON_MANDATORY.some((w) => w.re.test(t)) ? null : t.match(WEAK_MANDATE.re);
+    findings.push({ severity: 'error', message: 'No "must" or "shall". Every policy statement has to be mandatory.', tip: weak ? `Replace "${weak[0]}" with "must".` : 'Rewrite as "[Who] must [do what] [by when / how often]."',
+      fixes: weak ? [{ from: WEAK_MANDATE.re.source, to: 'must', label: '“must”', once: true }] : [] });
   }
   for (const w of NON_MANDATORY) {
-    if (w.re.test(t)) findings.push({ severity: 'warning', word: w.word, message: `Non-mandatory language: "${w.word}".`, tip: w.tip || `Replace with "${w.fix}".`, fix: w.fix ? { from: w.re.source, to: w.fix } : null });
+    if (!w.re.test(t)) continue;
+    const fixes = fixesFor(w, t);
+    findings.push({ severity: 'warning', word: w.word, message: `Non-mandatory language: "${(t.match(w.re) || [w.word])[0].trim()}".`, tip: w.tip || `Replace with "${fixes[0].to}".`, fixes });
   }
   for (const w of VAGUE) {
-    if (w.re.test(t)) findings.push({ severity: 'warning', word: w.word, message: `Not measurable: "${(t.match(w.re) || [w.word])[0]}".`, tip: w.tip });
+    if (!w.re.test(t)) continue;
+    findings.push({ severity: 'warning', word: w.word, message: `Not measurable: "${(t.match(w.re) || [w.word])[0].replace(/^[,\s]+|[,\s]+$/g, '')}".`, tip: w.tip, fixes: fixesFor(w, t) });
   }
   if (MANDATORY.test(t) && !PROHIBITION.test(t) && !MEASURABLE.test(t)) {
     findings.push({ severity: 'info', message: 'No measurable criterion found.', tip: 'Add a frequency, deadline, threshold or standard so an auditor can test it.' });
@@ -66,11 +101,27 @@ export function analyzeStatement(text = '') {
   const words = t.split(/\s+/).length;
   if (words > 60) findings.push({ severity: 'info', message: `Long statement (${words} words).`, tip: 'Split into separate numbered statements. One rule per statement.' });
   if ((t.match(/\b(?:must|shall)\b/gi) || []).length > 3) findings.push({ severity: 'info', message: 'Several requirements in one statement.', tip: 'Split so each can be mapped and tested separately.' });
+  // Keep the first fix as `fix` for older callers.
+  for (const f of findings) f.fix = f.fixes?.[0] || null;
   return findings;
 }
 
+// Replace the matched phrase, then tidy spacing, punctuation and capitalisation.
 export function applyFix(text, fix) {
-  return text.replace(new RegExp(fix.from, 'gi'), (m) => (m[0] === m[0].toUpperCase() ? fix.to[0].toUpperCase() + fix.to.slice(1) : fix.to));
+  const re = new RegExp(fix.from, fix.once ? 'i' : 'gi');
+  let out = text.replace(re, (m, ...args) => {
+    const at = args[args.length - 2];
+    if (!fix.to) {
+      if (m.startsWith(',') && m.endsWith(',')) return ',';
+      // Keep a sentence-ending full stop that the removed phrase (e.g. "etc.") swallowed.
+      return m.endsWith('.') && !text.slice(at + m.length).trim() ? '.' : ' ';
+    }
+    const lead = m.match(/^[,\s]*/)[0];
+    const core = m.slice(lead.length);
+    return lead + (core[0] && core[0] === core[0].toUpperCase() && core[0] !== core[0].toLowerCase() ? fix.to[0].toUpperCase() + fix.to.slice(1) : fix.to);
+  });
+  out = out.replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.;:])/g, '$1').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').replace(/^[\s,]+/, '').trimEnd();
+  return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
 const WHO = /\b(?:employees?|staff|personnel|workforce|contractors?|consultants?|third[- ]part(?:y|ies)|vendors?|suppliers?|users?|everyone|temporary|interns?|members?)\b/i;
@@ -132,7 +183,7 @@ export function lintPolicy(p, opts = {}) {
   const seen = new Map();
   statements.forEach((s, i) => {
     const num = `4.${i + 1}`;
-    for (const f of analyzeStatement(s.text)) add('statements', f.severity, `${num}: ${f.message}`, { statementId: s.id, tip: f.tip, fix: f.fix, num });
+    for (const f of analyzeStatement(s.text)) add('statements', f.severity, `${num}: ${f.message}`, { statementId: s.id, tip: f.tip, fix: f.fix, fixes: f.fixes, num });
     const norm = String(s.text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     if (norm && seen.has(norm)) add('statements', 'warning', `${num} duplicates ${seen.get(norm)}.`, { statementId: s.id, num, cat: 'consistency' });
     else if (norm) seen.set(norm, num);
