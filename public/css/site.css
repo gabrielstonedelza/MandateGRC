@@ -370,3 +370,9 @@ body.public { overflow-y: auto; }
 @media (max-width: 640px) {
   .foot-grid { grid-template-columns: 1fr; }
 }
+
+/* Annotated example: specimen text set like the policy document itself */
+.specimen { border: 1px solid var(--border); border-left: 3px solid var(--gold); border-radius: 10px; background: var(--surface); padding: 14px 18px; margin: 12px 0 18px; }
+.specimen-l { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.specimen p { margin: 0; font-family: var(--serif, Georgia, serif); font-size: 15.5px; line-height: 1.65; color: var(--text); }
+.ex-draft .btn { margin-top: 10px; }

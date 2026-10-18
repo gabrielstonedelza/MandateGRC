@@ -1,7 +1,8 @@
 // Documentation centre: step-by-step guides with real screenshots.
 // Content lives in docs-content.js (trusted, static HTML strings authored by us, never user data).
-import { html, raw, mount, $, $$, on, icon } from './core.js';
+import { html, raw, mount, $, $$, on, icon, state, can, GET, POST, PUT, toast } from './core.js';
 import { DOCS, DOC_GROUPS } from './docs-content.js';
+import { EXAMPLE_POLICY } from './example-policy.js';
 
 const byId = Object.fromEntries(DOCS.map((d) => [d.id, d]));
 const slug = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -15,6 +16,12 @@ function figure(src, caption) {
 }
 
 function block(b) {
+  if (b.specimen) return html`<div class="specimen"><span class="specimen-l">${b.specimen.label}</span><p>${b.specimen.text}</p></div>`;
+  if (b.exampleDraft) {
+    return state.me && can.write()
+      ? html`<div class="callout tip ex-draft"><b>Study it in the editor</b><div>Copy this example into your workspace as a draft. You'll see every section turn green and the Review report show <i>Ready</i>. Then compare it with your own policy, or delete it when you're done.<br><button class="btn primary sm" data-example-draft>${icon('plus')} Create this example as a draft</button></div></div>`
+      : html`<div class="callout tip"><b>Study it in the editor</b><div>Signed in as an Administrator or GRC Analyst, this page has a button that copies the example into your workspace as a draft.</div></div>`;
+  }
   if (b.p) return html`<p>${raw(b.p)}</p>`;
   if (b.h) return html`<h2 id="${slug(b.h)}">${b.h}</h2>`;
   if (b.figure) return figure(b.figure, b.caption);
@@ -94,12 +101,36 @@ function lightbox(src, cap) {
   document.body.appendChild(el);
 }
 
+// Copies the annotated example into the workspace: create a blank draft of the right type,
+// then fill every section. Controls are matched by framework and ref; any the workspace
+// doesn't have are skipped.
+async function createExampleDraft(btn) {
+  const E = EXAMPLE_POLICY;
+  btn.disabled = true;
+  try {
+    const controls = state.meta?.controls || [];
+    const resolve = (list) => list.map((r) => { const i = r.indexOf(':'); return controls.find((c) => c.framework_code === r.slice(0, i) && c.ref === r.slice(i + 1))?.id; }).filter(Boolean);
+    const created = await POST('/api/policies', { title: `${E.title} (example)`, owner: E.owner, policy_type: E.policy_type });
+    const draft = await GET(`/api/policies/${created.id}`);
+    const eff = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+    await PUT(`/api/policies/${created.id}`, {
+      title: `${E.title} (example)`, owner: E.owner, classification: E.classification, effective_date: eff, review_cycle_months: E.review_cycle_months,
+      purpose: E.purpose, scope: E.scope, enforcement: E.enforcement, related_docs: E.related_docs, policy_type: E.policy_type,
+      statements: E.statements.map((st) => ({ text: st.text, controls: resolve(st.controls) })),
+      roles: E.roles, ref_controls: resolve(E.ref_controls), updated_at: draft.updated_at,
+    });
+    toast('Example draft created. Every section is filled in; compare it with your own policy.');
+    location.hash = `#/policies/${created.id}`;
+  } catch (err) { btn.disabled = false; toast(err.message || 'Could not create the example.', 'err'); }
+}
+
 // Renders the docs into `el`. `embedded` = inside the signed-in app (no fixed public navbar offset).
 export function renderDocs(el, id, { embedded = false } = {}) {
   const d = id ? byId[id] : null;
   mount(el, html`<div class="docs ${embedded ? 'embedded' : ''}">${nav(d?.id)}${d ? page(d) : id ? html`<article class="docs-main"><h1>Page not found</h1><p><a href="#/docs">Back to the documentation home</a></p></article>` : home()}</div>`);
   document.title = `${d ? d.title + ' · ' : ''}Docs · MandateGRC`;
   on(el, 'click', '[data-zoom]', (e, b) => lightbox(b.dataset.zoom, b.dataset.cap));
+  on(el, 'click', '[data-example-draft]', (e, b) => createExampleDraft(b));
   if (window.innerWidth < 900) $('#doc-toc-wrap', el)?.removeAttribute('open');
   const q = $('#doc-q', el), results = $('#doc-results', el), toc = $('#doc-toc', el);
   const index = DOCS.map((x) => ({ x, text: (x.title + ' ' + x.summary + ' ' + JSON.stringify(x.blocks)).replace(/<[^>]+>/g, ' ').toLowerCase() }));

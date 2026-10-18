@@ -1,6 +1,9 @@
 // MandateGRC documentation content. Screenshots live in /docs/img and are regenerated with
 // `node tools/docs-screenshots.mjs`. Block types: p, steps, tip, warn, list, table, compare, templates.
+import { EXAMPLE_POLICY as EX } from './example-policy.js';
 const img = (name) => `/docs/img/${name}.jpg`;
+const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const refs = (list) => `<span class="mono-s">${list.map((r) => esc(r.replace(':', ' '))).join('<br>')}</span>`;
 
 export const DOC_GROUPS = ['Getting started', 'Policies', 'Risk & compliance', 'Assurance & admin', 'Help'];
 
@@ -99,7 +102,7 @@ export const DOCS = [
     id: 'write-policy', group: 'Policies', title: 'Write a policy, step by step', minutes: 8,
     summary: 'From a blank page (or template) to a lint-clean draft, one section at a time.',
     blocks: [
-      { p: 'This is the core workflow in MandateGRC. Follow these steps for any policy: access control, acceptable use, incident response or your own.' },
+      { p: 'This is the core workflow in MandateGRC. Follow these steps for any policy: access control, acceptable use, incident response or your own. To see a finished policy with notes on every field, read the <a href="#/docs/example-policy">annotated example</a>.' },
       { figure: img('08-policies'), caption: 'The Policies page: every policy with its status, version, quality score, mapped frameworks, next review date and acknowledgement progress. Use the tabs to filter by status.' },
       { steps: [
         { t: 'Start a draft', d: 'Click <b>New policy</b> (on the dashboard or the Policies page) and choose <b>Blank policy</b>. Pick the <b>Policy type</b> (for example <i>Data classification</i>): it tells the review which must-have topics to check for, and the dialog lists them. Choose <b>Other / custom</b> if none fit. Adjust the suggested name, optionally add the owner, and click <b>Create draft</b>. A blank draft is genuinely empty: nothing is pre-filled except what you entered. You can change the type later under <b>Header</b> in the editor.', img: img('09-new-policy') },
@@ -119,6 +122,111 @@ export const DOCS = [
         { t: 'Save', d: 'Click <b>Save changes</b> (top right) or press <b>⌘S / Ctrl+S</b>. If you try to leave with unsaved changes, MandateGRC asks first.', img: img('21-template-draft') },
       ] },
       { tip: 'Not sure how to phrase something? See <a href="#/docs/writing-guide">Policy writing guide</a> for word swaps and before/after examples for every section.' },
+    ],
+  },
+  {
+    id: 'example-policy', group: 'Policies', title: 'Annotated example: a complete policy, field by field', minutes: 12,
+    summary: 'A finished Incident Response Policy that scores Ready (100/100), with what to put in every field and why.',
+    blocks: [
+      { p: 'This guide walks through a complete, review-ready <b>Incident Response Policy</b>, one section at a time, in the same order as the editor. For every field it shows <b>what to put</b>, <b>what the example says</b>, and <b>the mistakes to avoid</b>. MandateGRC\'s own review rates this example <b>Ready, 100/100</b>: every must-have topic is covered, the wording is mandatory and measurable, and every statement is mapped to a framework control.' },
+      { exampleDraft: true },
+      { tip: 'Use the same pattern for any policy type. Only section 4 (the statements) changes much between an Incident Response Policy and, say, an Access Control Policy. The other sections follow the same recipe.' },
+
+      { h: '1 · Header' },
+      { p: 'The header identifies the policy and makes someone accountable for it. An auditor reads it first to check that the policy is owned, current and reviewed on schedule.' },
+      { table: { head: ['Field', 'What to put', 'In the example'], rows: [
+        ['Policy name', 'What it governs, ending in "Policy". Keep it short and stable: the name appears in every reference to it.', esc(EX.title)],
+        ['Policy type', 'The kind of policy. It decides which must-have topics the review checks for. Choose <i>Other</i> only if nothing fits.', 'Incident response'],
+        ['Policy owner', 'A <b>role</b>, not a person\'s name. People leave; roles stay. The owner answers for the policy and approves changes.', esc(EX.owner)],
+        ['Effective date', 'The date the rules start to apply. Leave time between approval and this date to brief people and update procedures.', 'e.g. 1 November 2026'],
+        ['Review cycle', '<b>12 months</b> (the professional standard). Shorter for fast-changing areas; never longer than 12 without a reason.', `${EX.review_cycle_months} months`],
+        ['Classification', 'Who may see the document: Public, Internal, Confidential or Restricted. Most policies are Internal.', esc(EX.classification)],
+        ['Code and version', 'Filled in for you: a code like POL-008 when you create it, and v1.0 when it is first approved.', 'Automatic'],
+      ] } },
+      { warn: 'Common mistakes: a person\'s name as owner ("Jane Smith"), no effective date, or a 24-month review cycle.' },
+
+      { h: '2 · Purpose' },
+      { p: '<b>One paragraph</b> (roughly 40 to 150 words) answering <i>why does this policy exist?</i> Name the risk it reduces and the outcome it protects. Do not put rules here; rules belong in section 4.' },
+      { specimen: { label: 'Example purpose', text: EX.purpose } },
+      { list: [
+        'Start with the reason: "This policy exists to ensure…" or "…to protect…".',
+        'Say what is protected (customers, employees, the business) and from what.',
+        'Mention the frameworks or laws it supports, if any.',
+        'Avoid: several paragraphs, history of the project, or "must" rules.',
+      ] },
+
+      { h: '3 · Scope' },
+      { p: 'Says <b>who</b> the policy applies to and <b>what</b> it covers. If someone can argue "this doesn\'t apply to me", the scope is incomplete.' },
+      { specimen: { label: 'Example scope', text: EX.scope } },
+      { table: { head: ['Part', 'What to include', 'In the example'], rows: [
+        ['Who', 'Every group of people: employees, contractors, consultants, temporary staff, third parties.', 'All employees, contractors, consultants, temporary staff and third parties'],
+        ['What', 'Every kind of asset: systems, networks, cloud services, applications, devices, data.', 'Information systems, networks, cloud services, applications, endpoints and data'],
+        ['Where', 'Location, if it matters (remote work, other countries, supplier sites).', '"wherever they are located"'],
+      ] } },
+      { tip: 'If something is deliberately out of scope, say so explicitly ("This policy does not cover physical safety incidents, which are handled under the Health & Safety Policy").' },
+
+      { h: '4 · Policy Statements' },
+      { p: 'The rules themselves, and the part an auditor tests. Each statement is <b>one rule</b> following the pattern <b>[Who] must [do what] [by when / how often]</b>, and each is mapped to at least one framework control. Together they must cover the must-have topics for the policy type (the Review report lists them).' },
+      { table: { head: ['#', 'Statement', 'Who · must do · measurable part', 'Topic covered', 'Mapped to'], rows: [
+        ['4.1', esc(EX.statements[0].text), 'Information Security Office · maintain a plan · reviewed <b>at least annually</b>', 'A documented response plan', refs(EX.statements[0].controls)],
+        ['4.2', esc(EX.statements[1].text), 'All personnel · report · <b>within 1 hour</b>', 'Reporting deadline', refs(EX.statements[1].controls)],
+        ['4.3', esc(EX.statements[2].text), 'SOC · triage and classify · <b>within 4 hours</b>, 4 named levels', 'Triage and severity', refs(EX.statements[2].controls)],
+        ['4.4', esc(EX.statements[3].text), 'Incident Commander · escalate and convene the team · <b>within 1 hour</b>', 'Escalation', refs(EX.statements[3].controls)],
+        ['4.5', esc(EX.statements[4].text), 'Data Protection Officer · notify · <b>within 72 hours</b> (the GDPR deadline)', 'External / regulatory notification', refs(EX.statements[4].controls)],
+        ['4.6', esc(EX.statements[5].text), 'Incident Response Team · preserve evidence · for <b>every</b> Critical/High incident', 'Evidence preservation', refs(EX.statements[5].controls)],
+        ['4.7', esc(EX.statements[6].text), 'Incident Commander · post-incident review · <b>within 10 business days</b>', 'Lessons learned', refs(EX.statements[6].controls)],
+        ['4.8', esc(EX.statements[7].text), 'Information Security Office · tabletop test · <b>at least annually</b>', 'Testing the plan', refs(EX.statements[7].controls)],
+      ] } },
+      { compare: [
+        ['Incidents should be reported promptly.', esc(EX.statements[1].text)],
+        ['Serious incidents are escalated as appropriate.', esc(EX.statements[3].text)],
+        ['We try to learn from incidents where possible.', esc(EX.statements[6].text)],
+      ] },
+      { list: [
+        '<b>Use "must" or "shall"</b>. "Should", "may", "will try to" make the rule optional. The linter offers one-click replacements.',
+        '<b>Name who does it</b>: a role or team, never "we" or "it". Every role you name here needs an entry in section 5.',
+        '<b>Make it testable</b>: a deadline (within 1 hour), a frequency (annually), a threshold (Critical or High) or a standard (AES-256).',
+        '<b>One rule per statement</b>, under about 60 words. Split anything with several "musts".',
+        '<b>Map every statement</b> with <b>Map controls</b>. Pick the few controls it actually satisfies, not every suggestion.',
+      ] },
+
+      { h: '5 · Roles & Responsibilities' },
+      { p: 'Who does what. Include the policy owner, whoever operates the controls (the custodian), the people who must follow the policy (users), and management. Every role or team named in a statement must appear here.' },
+      { table: { head: ['Role', 'Responsibility', 'Why it is there'], rows: [
+        [esc(EX.roles[0].role), esc(EX.roles[0].responsibility), 'The owner from the header must be described here.'],
+        [esc(EX.roles[1].role), esc(EX.roles[1].responsibility), 'Named in 4.2 and 4.3 (the custodian).'],
+        [esc(EX.roles[2].role), esc(EX.roles[2].responsibility), 'Named in 4.4 and 4.7.'],
+        [esc(EX.roles[3].role), esc(EX.roles[3].responsibility), 'Named in 4.5.'],
+        [esc(EX.roles[4].role), esc(EX.roles[4].responsibility), 'The users who must follow the policy.'],
+        [esc(EX.roles[5].role), esc(EX.roles[5].responsibility), 'Management backing and resources.'],
+      ] } },
+      { tip: 'Responsibilities describe the role\'s job in this policy in one or two sentences. Keep the deadlines in the statements, so there is only one place to change them.' },
+
+      { h: '6 · Compliance & Enforcement' },
+      { p: 'What makes the policy more than advice. Cover three things: <b>how compliance is checked</b>, <b>what happens on a violation</b>, and <b>how exceptions are requested</b>.' },
+      { specimen: { label: 'Example compliance & enforcement', text: EX.enforcement } },
+      { table: { head: ['Part', 'In the example'], rows: [
+        ['How compliance is verified', 'Quarterly review of incident records, annual internal audit, annual tabletop exercise.'],
+        ['Consequences', 'Disciplinary action up to and including termination; possible referral to law enforcement.'],
+        ['Exceptions', 'Requested through the Policy Exception process and approved by the CISO <i>before</i> the deviation.'],
+      ] } },
+
+      { h: '7 · References' },
+      { p: 'The frameworks the policy maps to, and related documents. The framework list fills in automatically from the controls you mapped to each statement. You can add policy-level controls and list related documents.' },
+      { table: { head: ['Field', 'What to put', 'In the example'], rows: [
+        ['Mapped frameworks', 'Automatic, from the statement mappings in section 4.', 'ISO/IEC 27001, NIST SP 800-53, NIST CSF, GDPR, CIS Controls'],
+        ['Policy-level references', 'Controls the policy as a whole satisfies (often the "have a policy" control).', refs(EX.ref_controls)],
+        ['Related documents', 'Procedures, plans, standards and other policies a reader may need. Separate them with semicolons.', esc(EX.related_docs)],
+      ] } },
+
+      { h: '8 · Revision History' },
+      { p: 'You don\'t type this section. MandateGRC builds it, so auditors can trust it:' },
+      { list: [
+        'While you draft, it shows a placeholder row: <i>1.0 (pending) · Work in progress</i>.',
+        'When you <b>submit for review</b>, you choose the change type (major or minor) and write a change summary, e.g. <i>"Initial version: reporting, triage, escalation, GDPR notification and testing."</i>',
+        'When the approver <b>approves</b>, the row becomes permanent: v1.0, date, author, approver and a full snapshot. Later revisions add v1.1, v2.0 and so on.',
+      ] },
+      { p: 'Next: <a href="#/docs/review-approve">Submit, review and approve</a>.' },
     ],
   },
   {
