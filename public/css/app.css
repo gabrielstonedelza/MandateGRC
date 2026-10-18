@@ -590,3 +590,10 @@ table.t { width: 100%; border-collapse: collapse; }
 .sample-banner { align-items: center; }
 .sample-banner .tag { vertical-align: 1px; }
 @media (max-width: 700px) { .np-choice { grid-template-columns: 1fr; } }
+
+/* Links from review/linter findings to the statement they are about */
+.rv-refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rv-refs .btn svg { width: 12px; height: 12px; }
+.lint-hint { padding: 8px 14px 0; }
+@keyframes flash-target { 0%, 40% { box-shadow: 0 0 0 2px var(--gold); background-color: color-mix(in srgb, var(--gold) 10%, transparent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.flash { animation: flash-target 1.8s ease-out; border-radius: 8px; }

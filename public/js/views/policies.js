@@ -334,6 +334,7 @@ export async function policyEditorView(el, id) {
       <ol>${SECTIONS.map((s) => { const c = counts(s.key); const cls = c.errors ? 'err' : c.warnings ? 'warn' : 'ok'; return html`<li><a href="#sec-${s.key}" data-jump="sec-${s.key}"><span class="n ${cls}">${c.errors || c.warnings ? s.n : '✓'}</span>${s.title}</a></li>`; })}</ol>`);
     mount($('#lint', el), html`
       <div class="card-h"><h3>Policy linter</h3><span class="right small ${l.errors ? '' : 'muted'}">${l.errors ? html`<span class="pill s-error">${l.errors} blocking</span>` : (l.warnings ? html`<span class="pill s-medium">No blocking issues</span>` : html`<span class="pill s-ok">${p.status === 'draft' ? 'Ready for review' : 'Passes all rules'}</span>`)}</span></div>
+      ${l.issues.length ? html`<div class="lint-hint muted small">Click an issue to jump to it in the policy.</div>` : ''}
       <div class="list">${l.issues.length ? l.issues.map((i) => html`<button class="item ${i.severity}" data-goto="${i.statementId ? 'st-' + i.statementId : 'sec-' + i.section}">${i.message}${i.tip ? html`<small>${i.tip}</small>` : ''}</button>`) : html`<div class="empty"><b>Clean</b>This policy follows every rule.</div>`}</div>
       <div class="rules"><b>Golden rules</b><br>1. Use “must” and “shall”, never “should” or “we try to”.<br>2. Keep statements specific and measurable.<br>3. Map each policy to a framework.</div>`);
     // Per-statement findings with one-click fixes.
@@ -477,8 +478,12 @@ export async function policyEditorView(el, id) {
   on(el, 'click', '[data-jump],[data-goto]', (e, b) => {
     e.preventDefault();
     const target = document.getElementById(b.dataset.jump || b.dataset.goto);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    target?.querySelector('textarea,input')?.focus({ preventScroll: true });
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.querySelector('textarea,input')?.focus({ preventScroll: true });
+    // Briefly highlight what the issue refers to so it is easy to spot.
+    target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+    setTimeout(() => target.classList.remove('flash'), 1800);
   });
   on(el, 'click', '#save', save);
   const keyHandler = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 's' && document.body.contains(el) && editable()) { e.preventDefault(); save(); } };
@@ -577,7 +582,9 @@ export function reviewCard(rv, { editable = false, openCats = new Set() } = {}) 
           <summary><b>${c.label}</b><span class="muted small">${items.length ? `${items.filter((i) => i.pass === true).length}/${items.filter((i) => i.pass !== null).length} passed` : ''}</span>${fails ? html`<span class="pill s-high plain">${fails} to fix</span>` : ''}</summary>
           <ul class="rv-list">${items.map((it) => {
             const req = c.key === 'coverage' && it.pass === false ? rv.requirements.find((r) => r.topic === it.label) : null;
+            const refs = it.pass === false ? it.refs || [] : [];
             return html`<li class="${it.pass === false ? 'fail' : ''}">${mark(it.pass)}<div><span>${it.label}</span>${it.detail ? html`<small>${it.detail}</small>` : ''}
+              ${refs.length ? html`<div class="rv-refs">${refs.map((r) => html`<button type="button" class="btn xs" data-goto="${r.target}">${icon('arrow')} Go to ${r.label}</button>`)}</div>` : ''}
               ${req ? html`<div class="rv-suggest"><i>“${req.suggest}”</i>${editable ? html`<button class="btn xs" data-insert="${req.id}">${icon('plus')} Insert suggested statement</button>` : ''}</div>` : ''}</div></li>`;
           })}</ul></details>`;
       })}

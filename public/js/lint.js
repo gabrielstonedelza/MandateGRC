@@ -320,7 +320,7 @@ function substanceChecks(p, statements, roles, opts, add) {
     out.type = { key: type.key, name: type.name };
     for (const r of type.requirements) {
       const hit = texts.findIndex((t) => r.test.every((re) => re.test(t)));
-      out.requirements.push({ ...r, test: undefined, met: hit >= 0, num: hit >= 0 ? `4.${hit + 1}` : null, controlIds: resolveRefs(r.controls, opts.controlsById) });
+      out.requirements.push({ ...r, test: undefined, met: hit >= 0, num: hit >= 0 ? `4.${hit + 1}` : null, statementId: hit >= 0 ? statements[hit].id : null, controlIds: resolveRefs(r.controls, opts.controlsById) });
       if (hit < 0) add('statements', 'warning', `Coverage gap: no statement covers "${r.topic}".`, { cat: 'coverage', reqId: r.id, tip: `${/^[AEIOU]/.test(type.name) ? 'An' : 'A'} ${type.name} policy is expected to address this. Insert the suggested statement from the Review report.` });
     }
     const met = out.requirements.filter((r) => r.met).length;
@@ -342,7 +342,7 @@ function substanceChecks(p, statements, roles, opts, add) {
   statements.forEach((s, i) => {
     for (const a of ANTI_PATTERNS) {
       if (a.test.test(s.text || '')) {
-        out.anti.push({ id: a.id, message: a.message, source: a.source, num: `4.${i + 1}` });
+        out.anti.push({ id: a.id, message: a.message, source: a.source, num: `4.${i + 1}`, statementId: s.id });
         add('statements', 'warning', `4.${i + 1}: ${a.message}`, { cat: 'benchmarks', statementId: s.id, num: `4.${i + 1}`, tip: `${a.tip} Source: ${a.source}.` });
       }
     }
@@ -429,16 +429,27 @@ export function reviewPolicy(p, opts = {}) {
   const verdict = lint.errors ? 'not_ready' : (substanceWarnings || overall < 85) ? 'needs_work' : 'ready';
 
   const checklist = [];
-  const push = (cat, label, pass, detail = '') => checklist.push({ cat, label, pass, detail });
-  push('structure', 'All eight sections are complete', !of('structure', 'error').length, of('structure', 'error').map((i) => i.message).join(' '));
-  push('structure', 'Owner, effective date and an annual review cycle are set', !lint.issues.some((i) => i.section === 'header' && i.severity !== 'info'));
-  push('structure', 'Every statement is mapped to a framework control', !lint.issues.some((i) => i.section === 'references' && i.statementId));
-  push('language', 'Every statement uses "must" or "shall"', !of('language', 'error').length);
-  push('language', 'No non-mandatory or unmeasurable wording', !of('language', 'warning').length, `${of('language', 'warning').length} wording warning(s)`);
-  if (sub.type) reqs.forEach((r) => push('coverage', r.topic, r.met, r.met ? `Covered by ${r.num}` : 'Not covered'));
+  // refs: where in the policy each check applies, so the report can link straight to it.
+  const refsOf = (issues) => {
+    const seen = new Map();
+    for (const i of issues) {
+      const target = i.statementId ? `st-${i.statementId}` : i.section ? `sec-${i.section}` : null;
+      if (target && !seen.has(target)) seen.set(target, { target, label: i.num || SECTIONS.find((s) => s.key === i.section)?.title || i.section });
+    }
+    return [...seen.values()];
+  };
+  const push = (cat, label, pass, detail = '', refs = []) => checklist.push({ cat, label, pass, detail, refs });
+  const unmapped = lint.issues.filter((i) => i.section === 'references' && i.statementId);
+  const headerIssues = lint.issues.filter((i) => i.section === 'header' && i.severity !== 'info');
+  push('structure', 'All eight sections are complete', !of('structure', 'error').length, of('structure', 'error').map((i) => i.message).join(' '), refsOf(of('structure', 'error')));
+  push('structure', 'Owner, effective date and an annual review cycle are set', !headerIssues.length, headerIssues.map((i) => i.message).join(' '), refsOf(headerIssues));
+  push('structure', 'Every statement is mapped to a framework control', !unmapped.length, unmapped.length ? `Not mapped: ${unmapped.map((i) => i.num).join(', ')}. Use “Map controls” under each statement.` : '', refsOf(unmapped));
+  push('language', 'Every statement uses "must" or "shall"', !of('language', 'error').length, of('language', 'error').map((i) => i.message).join(' '), refsOf(of('language', 'error')));
+  push('language', 'No non-mandatory or unmeasurable wording', !of('language', 'warning').length, of('language', 'warning').map((i) => i.message).join(' '), refsOf(of('language', 'warning')));
+  if (sub.type) reqs.forEach((r) => push('coverage', r.topic, r.met, r.met ? `Covered by ${r.num}` : 'Not covered', r.met ? [{ target: `st-${r.statementId}`, label: r.num }] : []));
   else push('coverage', 'Policy type recognised for a coverage checklist', null, 'No checklist for this policy type: coverage not assessed.');
-  sub.metrics.forEach((m) => push('benchmarks', `${m.metric}: ${m.shown} (${m.num})`, m.pass, `Baseline ${m.baseline}. ${m.source}`));
-  sub.anti.forEach((a) => push('benchmarks', `${a.num}: ${a.message}`, false, a.source));
+  sub.metrics.forEach((m) => push('benchmarks', `${m.metric}: ${m.shown} (${m.num})`, m.pass, `Baseline ${m.baseline}. ${m.source}`, [{ target: `st-${m.statementId}`, label: m.num }]));
+  sub.anti.forEach((a) => push('benchmarks', `${a.num}: ${a.message}`, false, a.source, [{ target: `st-${a.statementId}`, label: a.num }]));
   if (!sub.metrics.length && !sub.anti.length) push('benchmarks', 'Measurable values compared with baselines', null, 'No benchmarked values (lengths, deadlines, intervals) found in the statements.');
   if (p.owner) push('consistency', 'Policy owner is described in Roles', sub.ownerInRoles !== false);
   push('consistency', 'Everyone given duties in statements has a defined role', sub.actors.every((a) => a.defined), sub.actors.filter((a) => !a.defined).map((a) => a.name).join(', '));
