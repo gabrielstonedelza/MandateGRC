@@ -757,11 +757,26 @@ export function controlPicker({ text = '', selected = [], title, onSave }) {
       ${text ? html`<div class="notice info small">Detected themes: ${themesFromText.length ? themesFromText.map((t) => THEME_LABELS[t]).join(', ') : 'none. Search or browse by framework.'}${themesFromSel.size ? '. Crosswalk includes controls equivalent to those already mapped.' : ''}</div>` : ''}
       <div class="row"><select id="fw">${[['suggested', `Suggested & crosswalk (${suggested.length})`], ['selected', 'Selected'], ...state.meta.frameworks.map((f) => [f.code, f.name])].map(([v, l]) => html`<option value="${v}">${l}</option>`)}</select>
         <div class="search right"><span>${icon('search')}</span><input id="cq" placeholder="Search ref or title"></div></div>
+      <div class="pick-bar"><label class="pick-all"><input type="checkbox" id="pall"><span id="pall-l">Select all</span></label>
+        <button type="button" class="btn xs ghost right" id="pclear">Clear selection</button></div>
       <div class="pick-list" id="pl"></div>
       <div class="muted small" id="pcount"></div>
     </div>`,
     footer: html`<button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-save>Apply mappings</button>`,
     onMount: ({ el, close }) => {
+      let visible = [];
+      const countText = () => `${sel.size} control(s) selected across ${new Set([...sel].map((id) => all.find((c) => c.id === id)?.framework_code)).size} framework(s)`;
+      // The "Select all" box acts on the controls currently listed (after framework filter and search).
+      const syncAll = () => {
+        const n = visible.filter((id) => sel.has(id)).length;
+        const box = $('#pall', el);
+        box.disabled = !visible.length;
+        box.checked = !!visible.length && n === visible.length;
+        box.indeterminate = n > 0 && n < visible.length;
+        $('#pall-l', el).textContent = `Select all ${visible.length} shown`;
+        $('#pclear', el).disabled = !sel.size;
+        $('#pcount', el).textContent = countText();
+      };
       const draw = () => {
         let rows;
         if (q) rows = all.filter((c) => (fw === 'suggested' || fw === 'selected' || c.framework_code === fw) && `${c.framework_code} ${c.ref} ${c.title} ${c.family}`.toLowerCase().includes(q));
@@ -770,12 +785,19 @@ export function controlPicker({ text = '', selected = [], title, onSave }) {
         else rows = all.filter((c) => c.framework_code === fw);
         mount($('#pl', el), rows.length ? html`${rows.slice(0, 300).map((c) => html`<label class="pick ${fw === 'suggested' && !q ? 'sug' : ''}"><input type="checkbox" data-c="${c.id}" ${sel.has(c.id) ? 'checked' : ''}><span class="ref">${c.framework_code} ${c.ref}</span><span>${c.title}<small>${c.family}${c.themes ? ' · ' + c.themes.split(',').map((t) => THEME_LABELS[t] || t).join(', ') : ''}</small></span></label>`)}`
           : html`<div class="empty">No controls match.</div>`);
-        $('#pcount', el).textContent = `${sel.size} control(s) selected across ${new Set([...sel].map((id) => all.find((c) => c.id === id)?.framework_code)).size} framework(s)`;
+        visible = rows.slice(0, 300).map((c) => c.id);
+        syncAll();
       };
       draw();
       $('#fw', el).addEventListener('change', (e) => { fw = e.target.value; draw(); });
       $('#cq', el).addEventListener('input', (e) => { q = e.target.value.toLowerCase().trim(); draw(); });
-      on(el, 'change', '[data-c]', (e, cb) => { const id = Number(cb.dataset.c); cb.checked ? sel.add(id) : sel.delete(id); $('#pcount', el).textContent = `${sel.size} control(s) selected`; });
+      on(el, 'change', '[data-c]', (e, cb) => { const id = Number(cb.dataset.c); cb.checked ? sel.add(id) : sel.delete(id); syncAll(); });
+      $('#pall', el).addEventListener('change', (e) => {
+        visible.forEach((id) => (e.target.checked ? sel.add(id) : sel.delete(id)));
+        el.querySelectorAll('[data-c]').forEach((cb) => { cb.checked = sel.has(Number(cb.dataset.c)); });
+        syncAll();
+      });
+      $('#pclear', el).addEventListener('click', () => { sel.clear(); draw(); });
       on(el, 'click', '[data-save]', () => { onSave([...sel]); close(); });
     },
   });

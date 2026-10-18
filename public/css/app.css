@@ -632,3 +632,8 @@ textarea.fx-done { animation: fx-done 1.2s ease-out; }
   .finding.fresh, .finding.fresh *, .finding.has-fix .fix-main, textarea.fx-done { animation: none !important; }
   .fx-from::after { transform: scaleX(1); }
 }
+
+/* Control picker: select all shown */
+.pick-bar { display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+.pick-all { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pick-all input { width: 16px; height: 16px; accent-color: var(--gold); }
