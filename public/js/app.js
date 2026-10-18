@@ -214,6 +214,9 @@ async function route() {
   mount($('#crumbs'), html`<span>${state.org}</span> / <b>${match.title}</b>`);
   document.title = `${match.title} · MandateGRC`;
   current = null;
+  // Policies can be published, retired, deleted or attested on other pages (or by other people),
+  // so recount the sidebar badges on every navigation instead of only when the shell first loads.
+  refreshBadges();
   mount(view, html`<div class="empty muted">Loading…</div>`);
   try {
     current = (await match.fn(view, ...match.params)) || null;

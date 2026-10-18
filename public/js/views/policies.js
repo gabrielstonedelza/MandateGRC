@@ -150,6 +150,7 @@ export async function clearSampleData(after) {
   if (!(await confirmDialog({ title: 'Remove all sample data?', message: 'This deletes the example policies, risks, exceptions and evidence created with your workspace, and the two inactive demo colleagues. Anything you created yourself is kept. This cannot be undone.', confirm: 'Remove sample data', danger: true }))) return;
   try {
     const r = await POST('/api/workspace/clear-sample');
+    window.dispatchEvent(new Event('mandate:badges'));
     state.meta = await GET('/api/meta');
     toast(`Removed ${r.policies} policies, ${r.risks} risks, ${r.exceptions} exceptions and ${r.evidence} evidence items.`);
     await after?.();
@@ -571,7 +572,7 @@ export async function policyEditorView(el, id) {
       } else if (act === 'retire') {
         const note = await confirmDialog({ title: `Retire ${p.code}?`, message: 'Retired policies are kept for the record but no longer apply and are removed from coverage.', confirm: 'Retire policy', danger: true, input: { label: 'Reason', required: true } });
         if (!note) return;
-        await POST(`/api/policies/${p.id}/retire`, { note }); toast('Policy retired.'); await reload();
+        await POST(`/api/policies/${p.id}/retire`, { note }); toast('Policy retired.'); window.dispatchEvent(new Event('mandate:badges')); await reload();
       } else if (act === 'delete') {
         if (!(await confirmDialog({ title: 'Delete this draft?', message: 'This draft has never been approved, so it can be deleted. The deletion is recorded in the audit trail.', confirm: 'Delete', danger: true }))) return;
         snapshotSaved();
@@ -701,7 +702,7 @@ function publishDialog(p, done) {
       <label class="f"><span>Effective date</span><input type="date" name="eff" value="${p.effective_date || todayStr()}"></label></div>`,
     footer: html`<button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-go>Publish</button>`,
     onMount: ({ el, close }) => on(el, 'click', '[data-go]', async () => {
-      try { await POST(`/api/policies/${p.id}/publish`, { effective_date: $('[name=eff]', el).value }); close(); toast('Published. Attestation is open.'); await done(); } catch (e) { fail(e); }
+      try { await POST(`/api/policies/${p.id}/publish`, { effective_date: $('[name=eff]', el).value }); close(); toast('Published. Attestation is open.'); window.dispatchEvent(new Event('mandate:badges')); await done(); } catch (e) { fail(e); }
     }),
   });
 }
