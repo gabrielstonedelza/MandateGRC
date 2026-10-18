@@ -48,6 +48,8 @@ export const can = {
 export class ApiError extends Error { constructor(status, body) { super(body?.error || `Request failed (${status})`); this.status = status; this.body = body; } }
 export async function api(method, url, body) {
   const opts = { method, headers: { Accept: 'application/json' }, credentials: 'same-origin' };
+  // Every write sends a JSON body (an empty {} for DELETE), so it always passes the server's Content-Type check.
+  if (body === undefined && method !== 'GET') body = {};
   if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   if (method !== 'GET' && state.csrf) opts.headers['X-CSRF-Token'] = state.csrf;
   const res = await fetch(url, opts);
