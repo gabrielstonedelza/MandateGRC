@@ -323,6 +323,7 @@ export async function policyEditorView(el, id) {
   // ---------- Lint (runs on every keystroke, no server round-trip) ----------
   let lastReview = null;
   const openCats = new Set();
+  const seenFindings = new Set();
   function refreshLint() {
     const rv = reviewPolicy({ ...p, approved_at: p.approved_at }, { controlsById: controlsIndex(), today: todayStr(), peers: p.peers || [] });
     lastReview = rv;
@@ -344,8 +345,15 @@ export async function policyEditorView(el, id) {
       if (!box) return;
       const f = s.text ? analyzeStatement(s.text) : [];
       if (s.text && !(s.controls || []).length) f.push({ severity: 'warning', message: 'Not mapped to any framework control.', tip: 'Use “Map controls” to link it to ISO 27001, NIST, SOC 2 …' });
-      mount(box, html`${f.map((x, k) => html`<div class="finding ${x.severity}"><div><b>${x.message}</b> <span class="tip">${x.tip || ''}</span>
-        ${x.fixes?.length && editable() ? html`<div class="fix-row"><span class="muted">Suggested:</span>${x.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-fix="${s.id}:${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}</div></div>`)}`);
+      // Only findings that just appeared animate, so typing doesn't replay them on every keystroke.
+      const keys = f.map((x) => `${s.id}|${x.message}`);
+      mount(box, html`${f.map((x, k) => {
+        const canFix = x.fixes?.length && editable();
+        const fresh = canFix && !seenFindings.has(keys[k]);
+        return html`<div class="finding ${x.severity} ${canFix ? 'has-fix' : ''} ${fresh ? 'fresh' : ''}"><div><b>${x.message}</b> <span class="tip">${x.tip || ''}</span>
+        ${canFix ? html`${fixPreview(x.fixes[0])}<div class="fix-row"><span class="muted">Suggested:</span>${x.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-fix="${s.id}:${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}</div></div>`;
+      })}`);
+      keys.forEach((key) => seenFindings.add(key));
       box._findings = f;
     });
     const words = (p.purpose || '').trim().split(/\s+/).filter(Boolean).length;
@@ -452,8 +460,31 @@ export async function policyEditorView(el, id) {
   on(el, 'click', '[data-fix]', (e, b) => {
     const [sid, k, j] = b.dataset.fix.split(':');
     const box = el.querySelector(`[data-findings="${sid}"]`);
-    applyStatementFix(sid, box._findings[Number(k)].fixes[Number(j) || 0]);
+    const card = b.closest('.finding');
+    const fx = box._findings[Number(k)].fixes[Number(j) || 0];
+    if (!card || matchMedia('(prefers-reduced-motion: reduce)').matches) return applyStatementFix(sid, fx);
+    // Play the change first (strike, new words in, card folds away), then rewrite the text.
+    showPreview(card, fx);
+    card.classList.add('applying');
+    setTimeout(() => applyStatementFix(sid, fx), 650);
   });
+  // Hovering or focusing a suggestion previews it in the strike-through line.
+  const previewFrom = (e) => {
+    const b = e.target.closest?.('[data-fix]');
+    const card = b?.closest('.finding');
+    if (!card || card.classList.contains('applying')) return;
+    const [sid, k, j] = b.dataset.fix.split(':');
+    const fx = el.querySelector(`[data-findings="${sid}"]`)._findings[Number(k)].fixes[Number(j) || 0];
+    if (card.dataset.preview !== String(j)) { card.dataset.preview = String(j); showPreview(card, fx); }
+  };
+  el.addEventListener('mouseover', previewFrom);
+  el.addEventListener('focusin', previewFrom);
+  function showPreview(card, fx) {
+    const prev = card.querySelector('.fx-preview');
+    if (!prev) return;
+    prev.replaceWith(Object.assign(document.createElement('div'), { innerHTML: String(fixPreview(fx)) }).firstElementChild);
+    card.classList.remove('fresh'); void card.offsetWidth; card.classList.add('fresh');
+  }
   on(el, 'click', '[data-lfix]', (e, b) => {
     const [k, j] = b.dataset.lfix.split(':').map(Number);
     const issue = lastReview?.lint.issues[k];
@@ -466,7 +497,8 @@ export async function policyEditorView(el, id) {
     const ta = el.querySelector(`[data-stmt="${sid}"]`);
     if (ta) ta.value = s.text;
     refreshLint();
-    toast(fx.to ? `Replaced with “${fx.to}”.` : 'Removed.');
+    if (ta) { ta.classList.remove('fx-done'); void ta.offsetWidth; ta.classList.add('fx-done'); setTimeout(() => ta.classList.remove('fx-done'), 1200); }
+    toast(fx.to ? `Replaced “${fx.match}” with “${fx.to}”.` : `Removed “${fx.match}”.`);
   }
   on(el, 'click', '#add-role', () => { p.roles.push({ role: '', responsibility: '' }); restructure(); });
   on(el, 'click', '[data-del-role]', (e, b) => { p.roles.splice(Number(b.dataset.delRole), 1); restructure(); });
@@ -576,6 +608,8 @@ function scoreBars(rv) {
 
 // Button text for a one-click wording fix: "Use “must”" or "Remove it".
 const fixLabel = (fx) => (fx.to ? (fx.label?.startsWith('“') ? `Use ${fx.label}` : fx.label) : fx.label || 'Remove it');
+// "where feasible" struck through → replacement, drawn by CSS when the finding is fresh.
+const fixPreview = (fx) => html`<div class="fx-preview" aria-hidden="true"><span class="fx-from">${fx.match || ''}</span><span class="fx-arrow">→</span>${fx.to ? html`<span class="fx-to">${fx.to}</span>` : html`<span class="fx-to is-remove">removed</span>`}</div>`;
 const fixTitle = (fx) => (fx.to ? `Replace the flagged words with “${fx.to}”` : 'Delete the flagged words from the statement');
 
 export function reviewCard(rv, { editable = false, openCats = new Set() } = {}) {

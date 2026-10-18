@@ -70,7 +70,8 @@ const PROHIBITION = /\b(?:must not|shall not|must never|shall never|prohibited)\
 function fixesFor(rule, t) {
   const m = (t.match(rule.re) || [''])[0];
   const list = typeof rule.fixes === 'function' ? rule.fixes(m, t) : rule.fixes || [];
-  return list.map((f) => ({ from: rule.re.source, to: f.to, label: f.label || (f.to ? `“${f.to}”` : f.label) }));
+  const match = m.replace(/^[,\s]+|[,\s]+$/g, '');
+  return list.map((f) => ({ from: rule.re.source, to: f.to, label: f.label || (f.to ? `“${f.to}”` : f.label), match }));
 }
 
 export function analyzeStatement(text = '') {
@@ -84,7 +85,7 @@ export function analyzeStatement(text = '') {
     // If a non-mandatory phrase ("should", "will try to") is flagged below, its fix covers this too.
     const weak = NON_MANDATORY.some((w) => w.re.test(t)) ? null : t.match(WEAK_MANDATE.re);
     findings.push({ severity: 'error', message: 'No "must" or "shall". Every policy statement has to be mandatory.', tip: weak ? `Replace "${weak[0]}" with "must".` : 'Rewrite as "[Who] must [do what] [by when / how often]."',
-      fixes: weak ? [{ from: WEAK_MANDATE.re.source, to: 'must', label: '“must”', once: true }] : [] });
+      fixes: weak ? [{ from: WEAK_MANDATE.re.source, to: 'must', label: '“must”', once: true, match: weak[0] }] : [] });
   }
   for (const w of NON_MANDATORY) {
     if (!w.re.test(t)) continue;

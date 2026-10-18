@@ -204,7 +204,7 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await shot('13b-scope', '#sec-scope');
   await shot('14-statements', '#sec-statements');
   await shot('15-linter', '#lint');
-  await click('[data-fix]'); await sleep(500);
+  await click('[data-fix]'); await sleep(1400);
   await shot('16-fix-applied', '.stmt');
   await click('[data-map]'); await waitFor('.pick-list .pick'); await sleep(500);
   await shot('17-map-controls');
