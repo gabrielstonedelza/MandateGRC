@@ -132,6 +132,44 @@ export const MIGRATIONS = [
       DROP TABLE IF EXISTS findings;
     `,
   },
+  {
+    id: '005-soa',
+    description: 'ISO/IEC 27001 Statement of Applicability (entries and versioned revisions)',
+    up: `
+      -- Current applicability decision per Annex A control. A missing row means "applicable, not yet justified".
+      CREATE TABLE IF NOT EXISTS soa_entries (
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        control_id INTEGER NOT NULL REFERENCES controls(id) ON DELETE CASCADE,
+        applicable INTEGER NOT NULL DEFAULT 1 CHECK (applicable IN (0, 1)),
+        justification TEXT NOT NULL DEFAULT '',
+        updated_by INTEGER REFERENCES users(id),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        PRIMARY KEY (org_id, control_id)
+      );
+      -- Every change is a new SoA version; the log is append-only.
+      CREATE TABLE IF NOT EXISTS soa_revisions (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        changes TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        UNIQUE (org_id, version)
+      );
+      CREATE TRIGGER IF NOT EXISTS soa_revisions_no_update BEFORE UPDATE ON soa_revisions
+        BEGIN SELECT RAISE(ABORT, 'SoA revisions are append-only'); END;
+      CREATE TRIGGER IF NOT EXISTS soa_revisions_no_delete BEFORE DELETE ON soa_revisions
+        WHEN (SELECT COUNT(*) FROM orgs WHERE id = OLD.org_id) > 0
+        BEGIN SELECT RAISE(ABORT, 'SoA revisions are append-only'); END;
+    `,
+    down: `
+      DROP TRIGGER IF EXISTS soa_revisions_no_delete;
+      DROP TRIGGER IF EXISTS soa_revisions_no_update;
+      DROP TABLE IF EXISTS soa_revisions;
+      DROP TABLE IF EXISTS soa_entries;
+    `,
+  },
 ];
 
 const ensureTable = (db) => db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

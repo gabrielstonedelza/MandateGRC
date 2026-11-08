@@ -8,6 +8,7 @@ import { relyingParty, issueChallenge, consumeChallenge, verifyRegistration, ver
 import { audit, verifyChain } from './audit.js';
 import { registerControlRoutes } from './controls.js';
 import { registerFindingRoutes } from './findings.js';
+import { registerSoaRoutes } from './soa.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
 import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
@@ -1177,3 +1178,4 @@ route('PUT', '/api/settings', R.ADMIN, (ctx) => {
 // ---------------- Control register & testing (src/controls.js) ----------------
 const controlsApi = registerControlRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, evidenceView, hydratePolicy });
 const findingsApi = registerFindingRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, hydratePolicy, evidenceView });
+const soaApi = registerSoaRoutes({ route, R, controlsMap, userName, hydratePolicy, evidenceView });

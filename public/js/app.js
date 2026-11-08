@@ -10,6 +10,7 @@ import { attestationsView } from './views/attestations.js';
 import { auditView } from './views/audit.js';
 import { controlsView, controlDetailView } from './views/controls.js';
 import { findingsView, findingDetailView } from './views/findings.js';
+import { soaView } from './views/soa.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -32,6 +33,7 @@ const NAV = [
   { group: 'Comply', items: [
     { href: '#/controls', label: 'Control Register', icon: 'control', show: can.read },
     { href: '#/frameworks', label: 'Frameworks & Controls', icon: 'framework', show: can.read },
+    { href: '#/soa', label: 'Statement of Applicability', icon: 'scale', show: can.read },
     { href: '#/evidence', label: 'Evidence', icon: 'evidence', show: can.read },
   ] },
   { group: 'Assure', items: [{ href: '#/audit', label: 'Audit Trail', icon: 'audit', show: can.audit }] },
@@ -51,6 +53,7 @@ const ROUTES = [
   [/^\/attestations$/, attestationsView, 'Attestations'],
   [/^\/risks$/, risksView, 'Risk Register', can.read],
   [/^\/exceptions$/, exceptionsView, 'Exceptions', can.read],
+  [/^\/soa$/, soaView, 'Statement of Applicability', can.read],
   [/^\/findings$/, findingsView, 'Findings', can.read],
   [/^\/findings\/(\d+)$/, findingDetailView, 'Findings', can.read],
   [/^\/controls$/, controlsView, 'Control Register', can.read],

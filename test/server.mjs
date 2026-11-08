@@ -62,5 +62,6 @@ export async function client(base, { username = `u${crypto.randomBytes(4).toStri
     res = await call('POST', '/api/auth/signup/verify', { challengeId: o.challengeId, credential: softCredential(o.publicKey, base), username, name: username, org_name: org, sample: false, label: 'test' });
   }
   csrf = res.csrf;
-  return { user: res.user, get: (p) => call('GET', p), post: (p, b = {}) => call('POST', p, b), put: (p, b = {}) => call('PUT', p, b), del: (p) => call('DELETE', p, {}) };
+  const raw = (p) => fetch(base + p, { headers: { Cookie: cookie } });
+  return { user: res.user, raw, get: (p) => call('GET', p), post: (p, b = {}) => call('POST', p, b), put: (p, b = {}) => call('PUT', p, b), del: (p) => call('DELETE', p, {}) };
 }

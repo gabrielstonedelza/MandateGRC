@@ -849,3 +849,22 @@ tr.row-overdue td:first-child { box-shadow: inset 3px 0 0 var(--crit); }
 .back-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); text-decoration: none; margin-bottom: 4px; }
 .back-link:hover, .back-link:focus-visible { color: var(--text); }
 .back-link svg { width: 14px; height: 14px; transform: rotate(-90deg); }
+
+/* ---------- Statement of Applicability ---------- */
+.soa-cov { font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+.kpi-inline { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-2); }
+.kpi-inline b { font-size: 20px; color: var(--text); min-width: 34px; }
+.soa-table td .icon, .soa-table td svg { width: 13px; height: 13px; vertical-align: -2px; color: var(--muted); }
+.soa-table tr.soa-dirty td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
+.soa-detail > td { background: var(--bg-2); white-space: normal; }
+.soa-edit { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 16px; padding: 6px 0; }
+.soa-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-content: start; }
+.soa-links > div { display: grid; gap: 6px; align-content: start; }
+.soa-app { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 14px; }
+.soa-app legend { width: 100%; margin-bottom: 4px; }
+.soa-app input { width: auto; accent-color: var(--gold); }
+.savebar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(226, 180, 87, .5); background: var(--surface); box-shadow: var(--shadow); }
+.savebar input { flex: 1; min-width: 200px; height: 34px; }
+.soa-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.soa-history > li { display: grid; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+@media (max-width: 1000px) { .soa-edit, .soa-links { grid-template-columns: minmax(0, 1fr); } }

@@ -549,6 +549,35 @@ export const DOCS = [
     ],
   },
   {
+    id: 'soa', group: 'Risk & compliance', title: 'Statement of Applicability (ISO 27001)', minutes: 5,
+    summary: 'The mandatory ISO/IEC 27001 artefact, generated from your policies, controls, tests and evidence. Edit, version and export it.',
+    blocks: [
+      { p: 'ISO/IEC 27001 requires a <b>Statement of Applicability</b> (SoA): for every Annex A control, whether it applies to you, why, and how it is implemented. MandateGRC builds it from what you already have, so you only make and justify the decisions.' },
+      { figure: img('s1-soa'), caption: 'The SoA: tested-control coverage, implementation status across all 93 Annex A controls, and one row per control.' },
+      { h: 'How each row is filled' },
+      { table: { head: ['Column', 'Where it comes from'], rows: [
+        ['Applicable', 'Your decision. Every control is applicable until you exclude it.'],
+        ['Justification', 'Your text. When an included control has none, MandateGRC suggests one from its links (e.g. “Included: addressed by POL-001 4.3; operated by CTL-001”), marked <b>auto</b>. Exclusions always need your own justification.'],
+        ['Implementation', '<b>Implemented</b>: a linked control with an approved design passed (or passed with exception) its latest test and is not overdue. <b>Partially implemented</b>: a linked control exists but is untested, failing or overdue, or only a published policy covers it. <b>Planned</b>: only draft or in-review policy statements cover it. <b>Not implemented</b>: nothing is linked yet.'],
+        ['Policy statements', 'Statements in non-retired policies mapped to the control.'],
+        ['Controls', 'Control register entries linked to the control, with their latest test result.'],
+        ['Evidence', 'Evidence recorded against the control, plus evidence attached to its linked controls.'],
+      ] } },
+      { p: '<b>Coverage</b> is the share of applicable controls that have at least one linked control which has been tested. It is the number auditors ask for first.' },
+      { h: 'Decide applicability' },
+      { steps: [
+        { t: 'Open a control', d: 'Click <b>Edit</b> on a row. You see the decision, the justification, and the policy statements, controls and evidence behind it.' },
+        { t: 'Include or exclude it', d: 'Choose <b>Yes, included</b> or <b>No, excluded</b> and write the justification. An exclusion needs at least a sentence: ISO/IEC 27001 requires every exclusion to be justified.', img: img('s2-soa-edit') },
+        { t: 'Save a new version', d: 'Changed rows are marked in gold and counted in the bar at the bottom. Add an optional note (for example “Annual scoping review”) and click <b>Save as v2</b>. One save is one version, recording only what changed, and it is written to the audit trail.' },
+        { t: 'Review the history', d: 'Click <b>History</b> to see every version: who saved it, when, the note, and each control that was included, excluded or re-justified.', img: img('s3-soa-history') },
+      ] },
+      { h: 'Export' },
+      { p: 'Click <b>PDF</b> or <b>CSV</b>. Both are stamped with the SoA version and the date, list all 93 controls with their links, and carry the mapping disclaimer. Each export is recorded in the audit trail.' },
+      { figure: img('s4-soa-pdf'), caption: 'The exported PDF: version, coverage summary and the full Annex A table, with the version and date on every page.' },
+      { tip: 'Implementation status updates live as you map statements, test controls and record evidence; only applicability and justification are versioned decisions.' },
+    ],
+  },
+  {
     id: 'evidence', group: 'Risk & compliance', title: 'Collect evidence', minutes: 3,
     summary: 'Prove controls operate, and keep the proof fresh.',
     blocks: [
