@@ -252,8 +252,14 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await evaluate(`document.querySelectorAll('#review details').forEach((d) => { d.open = ['benchmarks', 'consistency'].includes(d.dataset.cat); })`);
   await sleep(300);
   await shot('20c-review-benchmarks', '#review details[data-cat=benchmarks]', 14, 'start');
-  await click('[data-insert]'); await sleep(600);
+  // A failed check explained, with fix choices; then apply the recommended coverage fix.
+  await evaluate(`document.querySelectorAll('#review details').forEach((d) => { d.open = d.dataset.cat === 'coverage'; })`);
+  await sleep(300);
+  await shot('20e-fix-choices', '#review details[data-cat=coverage] li.fail', 14, 'start');
+  await evaluate(`document.querySelector('#review details[data-cat=coverage] .rv-opt.rec').click()`); await sleep(700);
   await shot('20d-inserted', '.stmts li:last-child');
+  await evaluate(`document.querySelector('#review').scrollIntoView({ block: 'start' })`); await sleep(300);
+  await shot('20f-undo', '#review .card-h', 10);
   await evaluate(`document.getElementById('save')?.click()`); await sleep(700);
 
   // A lint-clean draft from a template, to show submission.
