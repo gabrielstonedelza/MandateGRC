@@ -197,6 +197,21 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await go('#/templates', '.tpl');
   await shot('10-templates');
 
+  // Import an existing policy (a sample Word document from tools/fixtures).
+  await go('#/policies', '#import');
+  await click('#import'); await waitFor('#imp-file'); await sleep(400);
+  await shot('10b-import-pick', '.modal', 20);
+  await send('DOM.enable');
+  const { root } = await send('DOM.getDocument', { depth: -1 });
+  const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#imp-file' });
+  await send('DOM.setFileInputFiles', { nodeId, files: [path.join(ROOT, 'tools', 'fixtures', 'vulnerability-management-policy.docx')] });
+  await waitFor('.imp-review', 10000); await sleep(500);
+  await shot('10c-import-review');
+  await evaluate(`(() => { document.querySelector('.imp-preview').open = true; document.querySelector('.modal-b').scrollTop = 99999; })()`); await sleep(400);
+  await shot('10d-import-details', '.modal', 20);
+  await click('#imp-create'); await waitFor('#lint', 8000); await sleep(1200);
+  await shot('10e-import-draft');
+
   await go(`#/policies/${weak.id}`, '#lint', 1000);
   await shot('11-editor');
   await shot('12-header', '#sec-header');
@@ -237,8 +252,14 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await evaluate(`document.querySelectorAll('#review details').forEach((d) => { d.open = ['benchmarks', 'consistency'].includes(d.dataset.cat); })`);
   await sleep(300);
   await shot('20c-review-benchmarks', '#review details[data-cat=benchmarks]', 14, 'start');
-  await click('[data-insert]'); await sleep(600);
+  // A failed check explained, with fix choices; then apply the recommended coverage fix.
+  await evaluate(`document.querySelectorAll('#review details').forEach((d) => { d.open = d.dataset.cat === 'coverage'; })`);
+  await sleep(300);
+  await shot('20e-fix-choices', '#review details[data-cat=coverage] li.fail', 14, 'start');
+  await evaluate(`document.querySelector('#review details[data-cat=coverage] .rv-opt.rec').click()`); await sleep(700);
   await shot('20d-inserted', '.stmts li:last-child');
+  await evaluate(`document.querySelector('#review').scrollIntoView({ block: 'start' })`); await sleep(300);
+  await shot('20f-undo', '#review .card-h', 10);
   await evaluate(`document.getElementById('save')?.click()`); await sleep(700);
 
   // A lint-clean draft from a template, to show submission.

@@ -4,6 +4,8 @@ import {
 } from '../core.js';
 import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, POLICY_TYPE_OPTIONS, analyzeStatement, applyFix, suggestThemes, THEME_LABELS } from '../lint.js';
 import { ctrlLabel, fwName } from './shared.js';
+import { importPolicyDialog } from './import.js';
+import { explainReview } from '../fixes.js';
 
 const STATUS_TABS = [['all', 'All'], ['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Published'], ['retired', 'Retired']];
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -38,7 +40,7 @@ export async function policiesView(el) {
   mount(el, html`
     <div class="page-head">
       <div><h1>Policies</h1><div class="sub">Every policy is built on the eight-part anatomy and scored by the MandateGRC linter. Blocking issues must be cleared before review.</div></div>
-      <div class="actions">${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} Template library</a><button class="btn primary" id="new">${icon('plus')} New policy</button>` : ''}</div>
+      <div class="actions">${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} Template library</a><button class="btn" id="import">${icon('download')} Import policy</button><button class="btn primary" id="new">${icon('plus')} New policy</button>` : ''}</div>
     </div>
     ${sampleBanner()}
     <div class="card" data-tour="policy-table">
@@ -53,6 +55,7 @@ export async function policiesView(el) {
   $('#q', el).addEventListener('input', (e) => { q = e.target.value.toLowerCase(); draw(); });
   on(el, 'click', 'tr[data-href]', (e, tr) => { location.hash = tr.dataset.href; });
   $('#new', el)?.addEventListener('click', () => newPolicyDialog());
+  $('#import', el)?.addEventListener('click', () => importPolicyDialog());
   on(el, 'click', '[data-clear-sample]', () => clearSampleData(() => window.dispatchEvent(new HashChangeEvent('hashchange'))));
 }
 
@@ -79,6 +82,7 @@ export function newPolicyDialog({ template = null } = {}) {
           <span class="np-ic">${icon('policy')}</span><span><b>Blank policy</b><small>Pick the type, then write everything yourself. Every section starts empty.</small></span></label>
         <label class="np-opt"><input type="radio" name="mode" value="template" ${mode === 'template' ? 'checked' : ''}>
           <span class="np-ic">${icon('template')}</span><span><b>From a template</b><small>Start from professionally written statements for that type, already mapped to frameworks, then tailor them.</small></span></label>
+        <button type="button" class="np-opt np-import" data-import><span class="np-ic">${icon('download')}</span><span><b>Import a document</b><small>Upload an existing policy (Word, PDF, Markdown, text). We split it into the anatomy and detect its type.</small></span></button>
       </div>
       <label class="f"><span>Policy type</span><select name="type">
         ${POLICY_TYPE_OPTIONS.map((t) => html`<option value="${t.key}" ${t.key === type ? 'selected' : ''}>${t.name}</option>`)}
@@ -119,6 +123,7 @@ export function newPolicyDialog({ template = null } = {}) {
       };
       sync();
       on(el, 'change', '[name=mode], [name=type]', sync);
+      on(el, 'click', '[data-import]', () => { close(); importPolicyDialog(); });
       const go = async (e) => {
         e?.preventDefault();
         const title = titleIn.value.trim();
@@ -164,7 +169,7 @@ export async function templatesView(el) {
   const t = state.meta.templates;
   mount(el, html`
     <div class="page-head"><div><h1>Template library</h1><div class="sub">Templates are <b>pre-written</b>: professionally worded policies that already pass the review, with statement-level framework mappings. Using one gives you a copy to tailor to your organization. Prefer your own words? Start a blank policy.</div></div>
-      <div class="actions"><button class="btn" id="blank">${icon('plus')} Start a blank policy</button></div></div>
+      <div class="actions"><button class="btn" id="tpl-import">${icon('download')} Import your own policy</button><button class="btn" id="blank">${icon('plus')} Start a blank policy</button></div></div>
     <div class="grid g3">${t.map((x) => html`<div class="card tpl">
       <h3>${x.title}</h3><div class="dim">${x.summary}</div>
       <div class="row">${x.frameworks.map((f) => html`<span class="tag">${f}</span>`)}</div>
@@ -172,6 +177,7 @@ export async function templatesView(el) {
     </div>`)}</div>`);
   on(el, 'click', '[data-use]', (e, b) => newPolicyDialog({ template: b.dataset.use }));
   on(el, 'click', '#blank', () => newPolicyDialog());
+  on(el, 'click', '#tpl-import', () => importPolicyDialog());
 }
 
 // =====================================================================
@@ -323,6 +329,8 @@ export async function policyEditorView(el, id) {
 
   // ---------- Lint (runs on every keystroke, no server round-trip) ----------
   let lastReview = null;
+  let lastHelp = new Map();
+  const undoStack = []; // snapshots taken before each review fix, newest last
   const openCats = new Set();
   const seenFindings = new Set();
   function refreshLint() {
@@ -371,7 +379,8 @@ export async function policyEditorView(el, id) {
       box.dataset.init = '1';
       rv.checklist.forEach((c) => { if (c.pass === false) openCats.add(c.cat); });
     }
-    mount(box, reviewCard(rv, { editable: editable(), openCats }));
+    lastHelp = editable() ? explainReview(rv, p, { controls: state.meta.controls || [], org: state.org || 'the organization', today: todayStr() }) : new Map();
+    mount(box, reviewCard(rv, { editable: editable(), openCats, help: lastHelp, canUndo: undoStack.length > 0 }));
   }
   el.addEventListener('toggle', (e) => {
     const d = e.target;
@@ -386,6 +395,52 @@ export async function policyEditorView(el, id) {
     toast(`Added statement 4.${p.statements.length}. Tailor the numbers to your organization.`);
     document.getElementById(`st-${st.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
+
+  // ---------- Review fixes: the user picks one of several options for each problem ----------
+  on(el, 'click', '[data-ract]', (e, b) => {
+    const [idx, pi, oi] = b.dataset.ract.split(':');
+    const h = lastHelp.get(Number(idx));
+    if (!h || !editable()) return;
+    const opt = pi === 'bulk' ? h.bulk : h.problems[Number(pi)]?.options[Number(oi)];
+    if (opt) applyReviewAction(opt.action, opt.label);
+  });
+  on(el, 'click', '[data-undo]', () => {
+    const snap = undoStack.pop();
+    if (!snap) return;
+    Object.assign(p, JSON.parse(snap));
+    restructure();
+    toast('Undid the last fix.');
+  });
+  function applyReviewAction(a, label) {
+    const s = a.sid ? p.statements.find((x) => x.id === a.sid) : null;
+    if (a.type === 'goto') { const t = document.getElementById(a.target); t?.scrollIntoView({ behavior: 'smooth', block: 'center' }); t?.querySelector('textarea,input')?.focus({ preventScroll: true }); return; }
+    if (a.type === 'href') { location.hash = a.href; return; }
+    if (a.type === 'pick') { if (s) controlPicker({ text: s.text, selected: s.controls, title: `Map statement 4.${p.statements.indexOf(s) + 1}`, onSave: (ids) => { snapshot(); s.controls = ids; restructure(); } }); return; }
+    snapshot();
+    let focusId = null;
+    switch (a.type) {
+      case 'field': p[a.field] = a.field === 'review_cycle_months' ? Number(a.value) : a.value; break;
+      case 'roles': p.roles = p.roles.filter((r) => (r.role || '').trim() || (r.responsibility || '').trim()).concat(a.roles.filter((r) => !p.roles.some((x) => x.role === r.role)).map((r) => ({ ...r }))); break;
+      case 'renameRole': if (p.roles[a.index]) p.roles[a.index].role = a.role; break;
+      case 'insert': { const st = { id: uid(), text: a.text, controls: [...(a.controls || [])] }; p.statements = p.statements.filter((x) => (x.text || '').trim() || x.controls?.length); p.statements.push(st); focusId = st.id; break; }
+      case 'insertMany': p.statements = p.statements.filter((x) => (x.text || '').trim()).concat(a.items.map((i) => ({ id: uid(), text: i.text, controls: [...(i.controls || [])] }))); break;
+      case 'map': if (s) s.controls = [...new Set([...(s.controls || []), ...a.ids])]; break;
+      case 'mapMany': a.items.forEach((i) => { const t = p.statements.find((x) => x.id === i.sid); if (t) t.controls = [...new Set([...(t.controls || []), ...i.ids])]; }); break;
+      case 'rewrite': if (s) s.text = a.text; break;
+      case 'wording': if (s) s.text = applyFix(s.text, a.fix); break;
+      case 'toPurpose': if (s) { p.purpose = [p.purpose, s.text].filter(Boolean).join(p.purpose ? ' ' : ''); p.statements = p.statements.filter((x) => x.id !== s.id); } break;
+      case 'remove': p.statements = p.statements.filter((x) => x.id !== a.sid); break;
+      default: return;
+    }
+    restructure();
+    toast(`Applied: ${label}. You can undo it from the review report.`);
+    const target = document.getElementById(focusId ? `st-${focusId}` : a.sid ? `st-${a.sid}` : '');
+    if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (focusId && !a.text) target.querySelector('textarea')?.focus({ preventScroll: true }); }
+  }
+  function snapshot() {
+    undoStack.push(JSON.stringify({ title: p.title, owner: p.owner, effective_date: p.effective_date, review_cycle_months: p.review_cycle_months, purpose: p.purpose, scope: p.scope, enforcement: p.enforcement, statements: p.statements, roles: p.roles }));
+    if (undoStack.length > 20) undoStack.shift();
+  }
 
   // ---------- Persistence ----------
   async function save() {
@@ -613,12 +668,12 @@ const fixLabel = (fx) => (fx.to ? (fx.label?.startsWith('“') ? `Use ${fx.label
 const fixPreview = (fx) => html`<div class="fx-preview" aria-hidden="true"><span class="fx-from">${fx.match || ''}</span><span class="fx-arrow">→</span>${fx.to ? html`<span class="fx-to">${fx.to}</span>` : html`<span class="fx-to is-remove">removed</span>`}</div>`;
 const fixTitle = (fx) => (fx.to ? `Replace the flagged words with “${fx.to}”` : 'Delete the flagged words from the statement');
 
-export function reviewCard(rv, { editable = false, openCats = new Set() } = {}) {
+export function reviewCard(rv, { editable = false, openCats = new Set(), help = new Map(), canUndo = false } = {}) {
   const byCat = (cat) => rv.checklist.filter((c) => c.cat === cat);
   const mark = (pass) => (pass === true ? html`<span class="rv-mark ok">✓</span>` : pass === false ? html`<span class="rv-mark bad">✕</span>` : html`<span class="rv-mark na">–</span>`);
   return html`
     <div class="card-h"><h2>${icon('audit')} Review report</h2>
-      <span class="right row">${pill(VERDICT_PILL[rv.verdict], rv.verdictLabel)}<b class="rv-overall" title="Overall review score">${rv.overall}</b></span></div>
+      <span class="right row">${canUndo ? html`<button class="btn xs" data-undo title="Undo the last fix you applied from this report">${icon('up')} Undo last fix</button>` : ''}${pill(VERDICT_PILL[rv.verdict], rv.verdictLabel)}<b class="rv-overall" title="Overall review score">${rv.overall}</b></span></div>
     <div class="card-b">
       <div class="rv-top">
         <div class="rv-type">${rv.type ? html`Checked as <b>${rv.type.name}</b> policy · ${rv.requirements.filter((r) => r.met).length}/${rv.requirements.length} must-have topics covered`
@@ -631,6 +686,8 @@ export function reviewCard(rv, { editable = false, openCats = new Set() } = {}) 
         return html`<details class="rv-cat" data-cat="${c.key}" ${openCats.has(c.key) ? 'open' : ''}>
           <summary><b>${c.label}</b><span class="muted small">${items.length ? `${items.filter((i) => i.pass === true).length}/${items.filter((i) => i.pass !== null).length} passed` : ''}</span>${fails ? html`<span class="pill s-high plain">${fails} to fix</span>` : ''}</summary>
           <ul class="rv-list">${items.map((it) => {
+            const h = it.pass === false ? help.get(rv.checklist.indexOf(it)) : null;
+            if (h) return html`<li class="fail">${mark(false)}<div><span>${it.label}</span>${helpBlock(h, rv.checklist.indexOf(it), editable)}</div></li>`;
             const req = c.key === 'coverage' && it.pass === false ? rv.requirements.find((r) => r.topic === it.label) : null;
             const refs = it.pass === false ? it.refs || [] : [];
             return html`<li class="${it.pass === false ? 'fail' : ''}">${mark(it.pass)}<div><span>${it.label}</span>${it.detail ? html`<small>${it.detail}</small>` : ''}
@@ -640,6 +697,24 @@ export function reviewCard(rv, { editable = false, openCats = new Set() } = {}) 
       })}
       <div class="muted small rv-foot">${icon('lock')} Rule-based review against published baselines (PCI DSS, NIST, ISO/IEC 27001, GDPR, CIS). It runs in your browser and on your MandateGRC server only: no AI, no third parties.</div>
     </div>`;
+}
+
+// What's wrong, why it matters, and the fixes to choose from, for one failed check.
+const SHOW_PROBLEMS = 4;
+function helpBlock(h, idx, editable) {
+  const prob = (pr, pi) => html`<div class="rv-prob">
+    <div class="rv-what">${pr.what}${pr.ref ? html` <button type="button" class="btn xs" data-goto="${pr.ref.target}">${icon('arrow')} Go to ${pr.ref.label}</button>` : ''}</div>
+    ${editable && pr.options.length ? html`<div class="rv-choose">Choose a fix:</div><div class="rv-opts">${pr.options.map((o, oi) => html`
+      <button type="button" class="rv-opt ${o.recommended ? 'rec' : ''} ${['goto', 'href', 'pick'].includes(o.action.type) ? 'nav' : ''}" data-ract="${idx}:${pi}:${oi}">
+        <span class="rv-opt-h">${o.recommended ? html`<span class="rv-rec">Recommended</span>` : ''}<b>${o.label}</b></span>
+        <span class="rv-opt-p">${o.preview}</span></button>`)}</div>` : ''}</div>`;
+  const first = h.problems.slice(0, SHOW_PROBLEMS), rest = h.problems.slice(SHOW_PROBLEMS);
+  return html`<div class="rv-help">
+    ${h.why ? html`<p class="rv-why"><b>Why it matters:</b> ${h.why}</p>` : ''}
+    ${h.bulk && editable ? html`<button type="button" class="btn sm primary rv-bulk" data-ract="${idx}:bulk">${icon('wand')} ${h.bulk.label}</button>` : ''}
+    ${first.map((pr, pi) => prob(pr, pi))}
+    ${rest.length ? html`<details class="rv-more"><summary>Show ${rest.length} more</summary>${rest.map((pr, k) => prob(pr, k + SHOW_PROBLEMS))}</details>` : ''}
+  </div>`;
 }
 
 function approveDialog(p, rv, done) {
