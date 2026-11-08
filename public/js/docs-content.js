@@ -125,6 +125,30 @@ export const DOCS = [
     ],
   },
   {
+    id: 'import-policy', group: 'Policies', title: 'Import an existing policy', minutes: 4,
+    summary: 'Upload a policy you already have. MandateGRC splits it into the anatomy and detects its type.',
+    blocks: [
+      { p: 'Already have policies in Word, PDF or a wiki? Import them instead of retyping. MandateGRC reads the document, finds its sections, statements, roles, owner and dates, detects the policy type, and matches any framework references to controls. You get a normal draft that you finish in the editor.' },
+      { steps: [
+        { t: 'Open the importer', d: 'Go to <b>Policies</b> and click <b>Import policy</b>. You can also choose <b>Import a document</b> in the <b>New policy</b> dialog, or <b>Import your own policy</b> in the Template library.', img: img('10b-import-pick') },
+        { t: 'Choose or drop your file', d: 'Drop the file on the box, or click it to browse. Supported: <b>Word (.docx)</b>, <b>PDF</b> (text-based, not scans), <b>Markdown</b>, <b>plain text</b> and <b>HTML</b>, up to 15 MB. You can also expand <b>Or paste the policy text</b>. The document is read <b>in your browser</b>: the file is never uploaded or stored, only the draft you create is saved.' },
+        { t: 'Check the detected type', d: 'MandateGRC compares the title and the statements with its checklists for seven policy types (Access Control, Acceptable Use, Incident Response, Data Classification, Backup, Vulnerability Management and Third-Party Risk), then shows its best match, how confident it is, and why. If it is wrong, pick the right type from the list: the type decides which coverage checklist the review uses. Policies of other kinds are imported as <i>Other / custom</i>.', img: img('10c-import-review') },
+        { t: 'Review what was found', d: 'Check the policy name, owner, effective date and review cycle; edit anything that is missing or wrong. The table shows how the document maps onto the 8-part anatomy: green rows were found (and from which heading), yellow rows are missing. Expand <b>Preview the statements</b> to see every rule that will be imported. If sections are missing, tick <b>Fill the missing … with the matching template\'s professional wording</b> to start from proven text instead of a blank.', img: img('10d-import-details') },
+        { t: 'Create the draft and finish it', d: 'Click <b>Create draft</b>. The policy opens in the editor as a fresh, unversioned draft. Work through the linter and the review report as you would for any policy: fix "should" and vague words, map any unmapped statements with <b>Map controls</b>, and add statements for missing checklist topics. Then submit it for review.', img: img('10e-import-draft') },
+      ] },
+      { h: 'Getting the best import' },
+      { list: [
+        '<b>Headings matter.</b> Sections are recognised by headings such as Purpose, Objective, Introduction, Scope, Applicability, Policy, Requirements, Roles and Responsibilities, Compliance, Enforcement, Exceptions and References. Numbered headings ("4. Policy") work too.',
+        '<b>Sub-headings become topics.</b> Under the policy section, a heading such as "Passwords" is added in front of its short bullet points, for example "Passwords: minimum length of 8 characters".',
+        '<b>Header details</b> are read from "Label: value" lines or two-column tables: Owner, Version, Effective date, Review, Classification.',
+        '<b>Framework references</b> such as "ISO 27001 Annex A 8.5", "NIST AC-2", "CC6.1", "CIS Control 6", "PCI DSS Requirement 8" or "GDPR Article 33" are matched to controls automatically. ISO 27001:2013 numbers (A.9.2.3) cannot be mapped and are listed for you to map by hand.',
+        '<b>Not imported:</b> the original revision history (MandateGRC records its own versions when the draft is approved; the original version number is noted in Related documents) and images. Definitions are kept in Related documents.',
+        '<b>Scanned PDFs</b> contain pictures of text, not text. Export the original document as .docx, or paste the text.',
+      ] },
+      { tip: 'Every import is recorded in the audit trail with the file name, format and detected type, so you can show auditors where a policy came from.' },
+    ],
+  },
+  {
     id: 'example-policy', group: 'Policies', title: 'Annotated example: a complete policy, field by field', minutes: 12,
     summary: 'A finished Incident Response Policy that scores Ready (100/100), with what to put in every field and why.',
     blocks: [
@@ -513,6 +537,7 @@ export const DOCS = [
         ['Why can\'t I approve this policy?', 'You edited or submitted it. Separation of duties requires a different approver.'],
         ['Why is "Submit for review" rejected?', 'The linter still shows blocking (red) issues. Click each one in the linter panel to jump to it and fix it.'],
         ['Can an exception last longer than a year?', 'No. Exceptions expire within 365 days. A permanent deviation needs a policy change.'],
+        ['My import put text in the wrong section', 'The importer relies on headings. Rename the heading in the original document (for example "Objective" or "Purpose") and import again, or simply move the text in the editor: every section is editable.'],
         ['Can people from other organizations see my data?', 'No. Every record belongs to your workspace and every request is limited to it. Others can only join through an invite your administrator creates.'],
         ['What does MandateGRC store about me?', 'Your username, optional display name, the public key of your passkeys, and the work you do in your workspace. No email, password, phone number or IP address. See the <a href="#/privacy">privacy policy</a>.'],
       ] },

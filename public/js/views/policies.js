@@ -4,6 +4,7 @@ import {
 } from '../core.js';
 import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, POLICY_TYPE_OPTIONS, analyzeStatement, applyFix, suggestThemes, THEME_LABELS } from '../lint.js';
 import { ctrlLabel, fwName } from './shared.js';
+import { importPolicyDialog } from './import.js';
 
 const STATUS_TABS = [['all', 'All'], ['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Published'], ['retired', 'Retired']];
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -38,7 +39,7 @@ export async function policiesView(el) {
   mount(el, html`
     <div class="page-head">
       <div><h1>Policies</h1><div class="sub">Every policy is built on the eight-part anatomy and scored by the MandateGRC linter. Blocking issues must be cleared before review.</div></div>
-      <div class="actions">${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} Template library</a><button class="btn primary" id="new">${icon('plus')} New policy</button>` : ''}</div>
+      <div class="actions">${can.write() ? html`<a class="btn" href="#/templates">${icon('template')} Template library</a><button class="btn" id="import">${icon('download')} Import policy</button><button class="btn primary" id="new">${icon('plus')} New policy</button>` : ''}</div>
     </div>
     ${sampleBanner()}
     <div class="card" data-tour="policy-table">
@@ -53,6 +54,7 @@ export async function policiesView(el) {
   $('#q', el).addEventListener('input', (e) => { q = e.target.value.toLowerCase(); draw(); });
   on(el, 'click', 'tr[data-href]', (e, tr) => { location.hash = tr.dataset.href; });
   $('#new', el)?.addEventListener('click', () => newPolicyDialog());
+  $('#import', el)?.addEventListener('click', () => importPolicyDialog());
   on(el, 'click', '[data-clear-sample]', () => clearSampleData(() => window.dispatchEvent(new HashChangeEvent('hashchange'))));
 }
 
@@ -79,6 +81,7 @@ export function newPolicyDialog({ template = null } = {}) {
           <span class="np-ic">${icon('policy')}</span><span><b>Blank policy</b><small>Pick the type, then write everything yourself. Every section starts empty.</small></span></label>
         <label class="np-opt"><input type="radio" name="mode" value="template" ${mode === 'template' ? 'checked' : ''}>
           <span class="np-ic">${icon('template')}</span><span><b>From a template</b><small>Start from professionally written statements for that type, already mapped to frameworks, then tailor them.</small></span></label>
+        <button type="button" class="np-opt np-import" data-import><span class="np-ic">${icon('download')}</span><span><b>Import a document</b><small>Upload an existing policy (Word, PDF, Markdown, text). We split it into the anatomy and detect its type.</small></span></button>
       </div>
       <label class="f"><span>Policy type</span><select name="type">
         ${POLICY_TYPE_OPTIONS.map((t) => html`<option value="${t.key}" ${t.key === type ? 'selected' : ''}>${t.name}</option>`)}
@@ -119,6 +122,7 @@ export function newPolicyDialog({ template = null } = {}) {
       };
       sync();
       on(el, 'change', '[name=mode], [name=type]', sync);
+      on(el, 'click', '[data-import]', () => { close(); importPolicyDialog(); });
       const go = async (e) => {
         e?.preventDefault();
         const title = titleIn.value.trim();
@@ -164,7 +168,7 @@ export async function templatesView(el) {
   const t = state.meta.templates;
   mount(el, html`
     <div class="page-head"><div><h1>Template library</h1><div class="sub">Templates are <b>pre-written</b>: professionally worded policies that already pass the review, with statement-level framework mappings. Using one gives you a copy to tailor to your organization. Prefer your own words? Start a blank policy.</div></div>
-      <div class="actions"><button class="btn" id="blank">${icon('plus')} Start a blank policy</button></div></div>
+      <div class="actions"><button class="btn" id="tpl-import">${icon('download')} Import your own policy</button><button class="btn" id="blank">${icon('plus')} Start a blank policy</button></div></div>
     <div class="grid g3">${t.map((x) => html`<div class="card tpl">
       <h3>${x.title}</h3><div class="dim">${x.summary}</div>
       <div class="row">${x.frameworks.map((f) => html`<span class="tag">${f}</span>`)}</div>
@@ -172,6 +176,7 @@ export async function templatesView(el) {
     </div>`)}</div>`);
   on(el, 'click', '[data-use]', (e, b) => newPolicyDialog({ template: b.dataset.use }));
   on(el, 'click', '#blank', () => newPolicyDialog());
+  on(el, 'click', '#tpl-import', () => importPolicyDialog());
 }
 
 // =====================================================================

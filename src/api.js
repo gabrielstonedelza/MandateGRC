@@ -535,6 +535,47 @@ route('POST', '/api/policies', R.WRITE, (ctx) => {
   return { id };
 });
 
+// Import: the browser has already read the uploaded file and split it into the anatomy
+// (the file itself never reaches the server). Content is validated exactly like a normal save
+// and always lands as a fresh, unversioned draft.
+route('POST', '/api/policies/import', R.WRITE, (ctx) => {
+  const b = ctx.body;
+  const v = validatePolicyContent({
+    ...b,
+    review_cycle_months: [3, 6, 12, 18, 24, 36].includes(Number(b.review_cycle_months)) ? Number(b.review_cycle_months) : 12,
+    statements: Array.isArray(b.statements) ? b.statements.slice(0, 200) : [],
+    roles: Array.isArray(b.roles) ? b.roles.slice(0, 30) : [],
+  }, ctx.user.org_id);
+  const source = {
+    filename: str(b.source?.filename, { name: 'File name', max: 200 }),
+    format: oneOf(b.source?.format, ['docx', 'pdf', 'markdown', 'text', 'html', 'paste'], { name: 'Format', fallback: 'text' }),
+    confidence: Math.max(0, Math.min(100, Math.round(Number(b.source?.confidence) || 0))),
+  };
+  // Optionally complete missing sections with the matching template's professional wording.
+  const filled = [];
+  if (b.fill_from_template && v.policy_type && v.policy_type !== 'other') {
+    const t = TEMPLATES.find((x) => x.type === v.policy_type);
+    if (t) {
+      const tp = templateToPolicy(t);
+      for (const k of ['purpose', 'scope', 'enforcement']) if (!v[k]) { v[k] = tp[k]; filled.push(k); }
+      if (!v.owner) { v.owner = tp.owner; filled.push('owner'); }
+      if (!v.roles.some((r) => r.role)) { v.roles = tp.roles; filled.push('roles'); }
+    }
+  }
+  if (!v.statements.length) v.statements = [{ id: newId(), text: '', controls: [] }];
+  if (!v.roles.length) v.roles = [{ role: '', responsibility: '' }];
+  const next = v.effective_date ? addMonths(v.effective_date, v.review_cycle_months) : null;
+  const code = nextCode('policies', 'POL', ctx.user.org_id);
+  const r = run(`INSERT INTO policies(org_id, code, title, owner, classification, effective_date, review_cycle_months, next_review_date, purpose, scope,
+                 statements, roles, enforcement, ref_controls, related_docs, policy_type, created_by, updated_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ctx.user.org_id, code, v.title, v.owner, v.classification, v.effective_date, v.review_cycle_months, next, v.purpose, v.scope,
+    JSON.stringify(v.statements), JSON.stringify(v.roles), v.enforcement, JSON.stringify(v.ref_controls), v.related_docs, v.policy_type, ctx.user.id, ctx.user.id);
+  const id = Number(r.lastInsertRowid);
+  audit(ctx.actor, 'policy.imported', 'policy', id, { code, ...source, policy_type: v.policy_type, statements: v.statements.length, filled_from_template: filled });
+  return { id, code, filled };
+});
+
 route('GET', '/api/policies/:id', R.ANY, (ctx) => {
   const p = loadPolicy(pid(ctx.params.id), ctx.user.org_id);
   if (ctx.user.role === 'employee') {

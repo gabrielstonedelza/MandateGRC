@@ -197,6 +197,21 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await go('#/templates', '.tpl');
   await shot('10-templates');
 
+  // Import an existing policy (a sample Word document from tools/fixtures).
+  await go('#/policies', '#import');
+  await click('#import'); await waitFor('#imp-file'); await sleep(400);
+  await shot('10b-import-pick', '.modal', 20);
+  await send('DOM.enable');
+  const { root } = await send('DOM.getDocument', { depth: -1 });
+  const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#imp-file' });
+  await send('DOM.setFileInputFiles', { nodeId, files: [path.join(ROOT, 'tools', 'fixtures', 'vulnerability-management-policy.docx')] });
+  await waitFor('.imp-review', 10000); await sleep(500);
+  await shot('10c-import-review');
+  await evaluate(`(() => { document.querySelector('.imp-preview').open = true; document.querySelector('.modal-b').scrollTop = 99999; })()`); await sleep(400);
+  await shot('10d-import-details', '.modal', 20);
+  await click('#imp-create'); await waitFor('#lint', 8000); await sleep(1200);
+  await shot('10e-import-draft');
+
   await go(`#/policies/${weak.id}`, '#lint', 1000);
   await shot('11-editor');
   await shot('12-header', '#sec-header');
