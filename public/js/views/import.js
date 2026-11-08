@@ -3,6 +3,7 @@
 import { html, mount, $, on, state, POST, toast, fail, modal, icon, fmtDate } from '../core.js';
 import { POLICY_TYPE_OPTIONS } from '../lint.js';
 import { ACCEPT, readPolicyFile, readPastedText, analyzePolicy } from '../importer.js';
+import { autoMapStatements, defaultFrameworks } from '../automap.js';
 
 const FORMAT_LABEL = { docx: 'Word', pdf: 'PDF', markdown: 'Markdown', text: 'Text', html: 'HTML', paste: 'Pasted text' };
 const CYCLES = [3, 6, 12, 18, 24, 36];
@@ -65,6 +66,7 @@ export function importPolicyDialog() {
         const missing = ['purpose', 'scope', 'enforcement'].filter((k) => !d[k]).concat(d.roles.length ? [] : ['roles'], d.owner ? [] : ['owner']);
         const metaFound = ['owner', 'effective_date', 'review_cycle', 'classification'].filter((k) => r.meta[k]).length;
         const row = (n, name, ok, detail) => html`<li class="${ok === true ? 'ok' : ok === false ? 'miss' : 'info'}"><span class="an-n">${n}</span><b>${name}</b><span class="an-d">${detail}</span></li>`;
+        const sugCount = autoMapStatements(d.statements, state.meta.controls || [], { frameworks: defaultFrameworks(d, state.meta.controls || [], state.meta.frameworks || []) }).size;
         const from = (k) => (r.found[k] && !r.found[k].startsWith('(') ? `from “${r.found[k]}”` : r.found[k] ? r.found[k].replace(/[()]/g, '') : '');
         mount(body, html`<div class="imp-review">
           <div class="imp-src">${icon('policy')}<b>${r.filename}</b><span class="tag">${FORMAT_LABEL[r.format] || r.format}</span></div>
@@ -95,7 +97,7 @@ export function importPolicyDialog() {
             ${row(4, 'Policy statements', r.counts.statements > 0, r.counts.statements ? `${r.counts.statements} statements · ${r.counts.mandatory} already use “must/shall”` : 'None recognised')}
             ${row(5, 'Roles & responsibilities', d.roles.length > 0, d.roles.length ? `${d.roles.length} roles: ${d.roles.slice(0, 4).map((x) => x.role).join(', ')}${d.roles.length > 4 ? '…' : ''}` : 'Not found')}
             ${row(6, 'Compliance & enforcement', !!d.enforcement, d.enforcement ? from('enforcement') : 'Not found')}
-            ${row(7, 'References', r.counts.mapped > 0 ? true : null, r.counts.mapped ? `${r.counts.mapped} framework controls matched automatically` : 'No framework references found. Map statements after import.')}
+            ${row(7, 'References', r.counts.mapped > 0 || sugCount > 0 ? true : null, [r.counts.mapped ? `${r.counts.mapped} controls taken from the document's own references` : '', sugCount ? `${sugCount} statement${sugCount === 1 ? '' : 's'} will get suggested controls to confirm` : ''].filter(Boolean).join(' · ') || 'No framework references found. Map statements after import.')}
             ${row(8, 'Revision history', null, 'Starts fresh: MandateGRC records versions when the draft is approved')}
           </ol>
           ${r.unrecognized.length ? html`<div class="muted small">Sub-sections imported as statement topics: ${r.unrecognized.join(' · ')}</div>` : ''}
