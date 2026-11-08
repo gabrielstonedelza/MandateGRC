@@ -64,6 +64,9 @@ const VAGUE = [
 
 const MEASURABLE = /\d|\b(?:annually|yearly|quarterly|monthly|weekly|daily|hourly|every|within|before|prior to|no later than|at least|at most|minimum|maximum|each|all|never|only|unique|before)\b/i;
 const MANDATORY = /\b(?:must|shall)\b/i;
+// Requirements whose intent is a deadline, a frequency or a threshold. Only these can lack a
+// measurable criterion; qualitative mandates ("the root cause shall be identified") cannot.
+const TIME_BOUND = /\b(?:review(?:ed|s)?|rotat\w*|(?:re-?)?test(?:ed|s)?|scann?\w*|patch\w*|remediat\w*|back(?:ed)? ?up\w*|train(?:ed|ing)?|renew\w*|re-?assess\w*|recertif\w*|re-?validat\w*|audit(?:ed|s)?|expir\w*|lock(?:ed)? ?out|time ?out|timeouts?|retain(?:ed)?|retention|notif\w*|reported|escalat\w*|revok\w*|deprovision\w*|disabled|updated|upgraded|refresh\w*|length|characters|attempts|threshold|frequency|interval|deadline|\bsla\b)\b/i;
 const PROHIBITION = /\b(?:must not|shall not|must never|shall never|prohibited)\b/i;
 
 // Build the replacement options for a matched phrase. `from` is the regex that applyFix replaces.
@@ -74,7 +77,8 @@ function fixesFor(rule, t) {
   return list.map((f) => ({ from: rule.re.source, to: f.to, label: f.label || (f.to ? `“${f.to}”` : f.label), match }));
 }
 
-export function analyzeStatement(text = '') {
+// opts.qualitative: the analyst accepted this statement as qualitative (no number applies).
+export function analyzeStatement(text = '', opts = {}) {
   const t = String(text || '').trim();
   const findings = [];
   if (!t) {
@@ -96,8 +100,10 @@ export function analyzeStatement(text = '') {
     if (!w.re.test(t)) continue;
     findings.push({ severity: 'warning', word: w.word, message: `Not measurable: "${(t.match(w.re) || [w.word])[0].replace(/^[,\s]+|[,\s]+$/g, '')}".`, tip: w.tip, fixes: fixesFor(w, t) });
   }
-  if (MANDATORY.test(t) && !PROHIBITION.test(t) && !MEASURABLE.test(t)) {
-    findings.push({ severity: 'info', message: 'No measurable criterion found.', tip: 'Add a frequency, deadline, threshold or standard so an auditor can test it.' });
+  const timeBound = t.match(TIME_BOUND);
+  if (MANDATORY.test(t) && !PROHIBITION.test(t) && !MEASURABLE.test(t) && timeBound && !opts.qualitative) {
+    findings.push({ severity: 'info', kind: 'measurable', message: `No deadline, frequency or threshold for “${timeBound[0]}”.`,
+      tip: 'Say how often or by when (e.g. "annually", "within 30 days"), or mark it qualitative if no number applies.' });
   }
   const words = t.split(/\s+/).length;
   if (words > 60) findings.push({ severity: 'info', message: `Long statement (${words} words).`, tip: 'Split into separate numbered statements. One rule per statement.' });
@@ -130,14 +136,27 @@ const WHAT = /\b(?:systems?|data|information|assets?|devices?|applications?|netw
 const WHY = /\b(?:to|so that|in order to|ensure|protect|reduce|minimi[sz]e|establish|prevent|defines?|meet|comply)\b/i;
 const CONSEQUENCE = /\b(?:disciplinary|termination|terminate|sanction|consequence|dismissal|penalt(?:y|ies)|legal action|revocation|revoke)\b/i;
 
+// Titles that hold policy ownership in practice, not only rows literally called "Owner".
+export const OWNER_ROLE = /\bowner\b|\bsecurity lead\b|\bciso\b|chief (information )?security officer|\bcio\b|chief information officer|head of (information |cyber ?)?security|information security (manager|officer|lead)|\bsecurity (officer|manager)\b|\bdpo\b|data protection officer|privacy officer|policy (lead|sponsor|steward)|accountable executive/i;
+
+// The owner role resolves from a tagged row, a recognised title, or a row naming the document owner.
+export function ownerRoleIndex(roles, owner = '') {
+  const o = String(owner || '').trim().toLowerCase();
+  let i = roles.findIndex((r) => r.owner === true);
+  if (i < 0) i = roles.findIndex((r) => OWNER_ROLE.test(r.role || ''));
+  if (i < 0 && o.length >= 3) i = roles.findIndex((r) => { const n = String(r.role || '').trim().toLowerCase(); return n.length >= 3 && (n.includes(o) || o.includes(n)); });
+  return i;
+}
+
 const ROLE_SLOTS = [
-  { key: 'Owner', re: /owner/i },
+  { key: 'Owner', resolve: (roles, p) => ownerRoleIndex(roles, p.owner) >= 0,
+    message: 'No owner role defined. Add the accountable role (e.g. "Policy Owner", "CISO", "Security Lead"), or tag an existing role as the owner.' },
   { key: 'Custodian', re: /custodian|administrator|operations|\bIT\b|engineer|team|soc\b|center/i },
   { key: 'Users', re: /\busers?\b|personnel|employees?|staff|workforce/i },
   { key: 'Management', re: /management|managers?|leadership|executive|board/i },
 ];
 
-export function lintPolicy(p, opts = {}) {
+function lintRaw(p, opts = {}) {
   const today = opts.today || new Date().toISOString().slice(0, 10);
   const controlsById = opts.controlsById || null;
   const issues = [];
@@ -184,7 +203,7 @@ export function lintPolicy(p, opts = {}) {
   const seen = new Map();
   statements.forEach((s, i) => {
     const num = `4.${i + 1}`;
-    for (const f of analyzeStatement(s.text)) add('statements', f.severity, `${num}: ${f.message}`, { statementId: s.id, tip: f.tip, fix: f.fix, fixes: f.fixes, num });
+    for (const f of analyzeStatement(s.text, { qualitative: !!s.qualitative?.reason })) add('statements', f.severity, `${num}: ${f.message}`, { statementId: s.id, tip: f.tip, fix: f.fix, fixes: f.fixes, num, kind: f.kind });
     const norm = String(s.text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     if (norm && seen.has(norm)) add('statements', 'warning', `${num} duplicates ${seen.get(norm)}.`, { statementId: s.id, num, cat: 'consistency' });
     else if (norm) seen.set(norm, num);
@@ -195,7 +214,8 @@ export function lintPolicy(p, opts = {}) {
   if (!roles.length) add('roles', 'error', 'No roles defined. State who does what.');
   else {
     for (const slot of ROLE_SLOTS) {
-      if (!roles.some((r) => slot.re.test(r.role))) add('roles', 'warning', `No "${slot.key}" role defined.`);
+      const ok = slot.resolve ? slot.resolve(roles, p) : roles.some((r) => slot.re.test(r.role));
+      if (!ok) add('roles', 'warning', slot.message || `No "${slot.key}" role defined.`, { slot: slot.key });
     }
     roles.forEach((r) => { if (!(r.responsibility || '').trim()) add('roles', 'warning', `Role "${r.role}" has no responsibility described.`); });
   }
@@ -214,13 +234,13 @@ export function lintPolicy(p, opts = {}) {
   statements.forEach((s, i) => {
     const c = Array.isArray(s.controls) ? s.controls : [];
     c.forEach((id) => mapped.add(id));
-    if (s.text && !c.length) add('references', 'warning', `4.${i + 1} is not mapped to any framework control.`, { statementId: s.id, num: `4.${i + 1}` });
+    if (s.text && !c.length) add('references', 'warning', `4.${i + 1} is not mapped to any framework control.`, { statementId: s.id, num: `4.${i + 1}`, cat: 'coverage' });
   });
-  if (!mapped.size) add('references', 'error', 'Not mapped to any framework. Mapping is what makes a policy GRC-grade.');
+  if (!mapped.size) add('references', 'error', 'Not mapped to any framework. Mapping is what makes a policy GRC-grade.', { cat: 'coverage' });
   let frameworks = new Set();
   if (controlsById) {
     mapped.forEach((id) => { const c = controlsById.get ? controlsById.get(id) : controlsById[id]; if (c) frameworks.add(c.framework_code); });
-    if (mapped.size && frameworks.size === 1) add('references', 'info', 'Mapped to only one framework. Use crosswalk suggestions to map to others you report against.');
+    if (mapped.size && frameworks.size === 1) add('references', 'info', 'Mapped to only one framework. Use crosswalk suggestions to map to others you report against.', { cat: 'coverage' });
   }
 
   // 8. History: informational only.
@@ -229,9 +249,7 @@ export function lintPolicy(p, opts = {}) {
   // Substance: coverage, benchmarks and consistency.
   const substance = substanceChecks(p, statements, roles, opts, add);
 
-  const weights = { error: 12, warning: 4, info: 1 };
-  const penalty = issues.reduce((a, i) => a + weights[i.severity], 0);
-  const score = Math.max(0, 100 - penalty);
+  // The score and grade are filled in by reviewPolicy, so every screen shows the same number.
   const sections = {};
   for (const s of SECTIONS) {
     const si = issues.filter((i) => i.section === s.key);
@@ -243,8 +261,8 @@ export function lintPolicy(p, opts = {}) {
     sections[s.key].complete = sections[s.key].errors === 0;
   }
   return {
-    score,
-    grade: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 65 ? 'C' : score >= 50 ? 'D' : 'F',
+    score: null,
+    grade: null,
     errors: issues.filter((i) => i.severity === 'error').length,
     warnings: issues.filter((i) => i.severity === 'warning').length,
     issues,
@@ -405,7 +423,7 @@ function substanceChecks(p, statements, roles, opts, add) {
   const owner = String(p.owner || '').trim();
   if (owner) {
     const acronym = owner.split(/\s+/).filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('');
-    const ownerNamed = roleText.toLowerCase().includes(owner.toLowerCase()) || (acronym.length >= 2 && new RegExp(`\\b${acronym}\\b`).test(roleText));
+    const ownerNamed = roles.some((r) => r.owner === true) || roleText.toLowerCase().includes(owner.toLowerCase()) || (acronym.length >= 2 && new RegExp(`\\b${acronym}\\b`).test(roleText));
     out.ownerInRoles = ownerNamed;
     if (roles.length && !ownerNamed) add('roles', 'warning', `The policy owner ("${owner}") is not described in Roles & Responsibilities.`, { cat: 'consistency', tip: 'Name the owner in the "Policy Owner" role so accountability is unambiguous.' });
   }
@@ -456,29 +474,32 @@ export function metricSummary(statements) {
 export const REVIEW_CATEGORIES = [
   { key: 'structure', label: 'Structure', weight: 0.2 },
   { key: 'language', label: 'Language', weight: 0.2 },
-  { key: 'coverage', label: 'Coverage', weight: 0.25 },
+  { key: 'coverage', label: 'Coverage & mapping', weight: 0.25 },
   { key: 'benchmarks', label: 'Benchmarks', weight: 0.2 },
   { key: 'consistency', label: 'Consistency', weight: 0.15 },
 ];
 
+export const gradeOf = (score) => (score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 65 ? 'C' : score >= 50 ? 'D' : 'F');
+
+// A category's score is the share of its checks that pass (checks that do not apply are left out),
+// so one failing check costs its share and never zeroes the category.
+export function categoryScore(items) {
+  const assessed = items.filter((c) => c.pass === true || c.pass === false);
+  if (!assessed.length) return null;
+  return Math.round((assessed.filter((c) => c.pass).length / assessed.length) * 100);
+}
+
+// The single authoritative score: every screen (editor ring, review report, policy list, dashboard)
+// reads it from here.
+export function lintPolicy(p, opts = {}) {
+  return reviewPolicy(p, opts).lint;
+}
+
 export function reviewPolicy(p, opts = {}) {
-  const lint = lintPolicy(p, opts);
+  const lint = lintRaw(p, opts);
   const sub = lint.substance;
   const of = (cat, sev) => lint.issues.filter((i) => i.cat === cat && (!sev || i.severity === sev));
-  const penalty = (cat, w) => Math.max(0, 100 - of(cat, 'error').length * w[0] - of(cat, 'warning').length * w[1] - of(cat, 'info').length * w[2]);
   const reqs = sub.requirements;
-  const scores = {
-    structure: penalty('structure', [15, 5, 1]),
-    language: penalty('language', [15, 5, 1]),
-    coverage: sub.type ? Math.round((reqs.filter((r) => r.met).length / reqs.length) * 100) : null,
-    benchmarks: penalty('benchmarks', [25, 20, 5]),
-    consistency: penalty('consistency', [25, 20, 5]),
-  };
-  const active = REVIEW_CATEGORIES.filter((c) => scores[c.key] != null);
-  const wsum = active.reduce((a, c) => a + c.weight, 0);
-  const overall = Math.round(active.reduce((a, c) => a + scores[c.key] * c.weight, 0) / wsum);
-  const substanceWarnings = lint.issues.filter((i) => ['coverage', 'benchmarks', 'consistency'].includes(i.cat) && i.severity !== 'info').length;
-  const verdict = lint.errors ? 'not_ready' : (substanceWarnings || overall < 85) ? 'needs_work' : 'ready';
 
   const checklist = [];
   // refs: where in the policy each check applies, so the report can link straight to it.
@@ -495,9 +516,11 @@ export function reviewPolicy(p, opts = {}) {
   const headerIssues = lint.issues.filter((i) => i.section === 'header' && i.severity !== 'info');
   push('structure', 'All eight sections are complete', !of('structure', 'error').length, of('structure', 'error').map((i) => i.message).join(' '), refsOf(of('structure', 'error')));
   push('structure', 'Owner, effective date and an annual review cycle are set', !headerIssues.length, headerIssues.map((i) => i.message).join(' '), refsOf(headerIssues));
-  push('structure', 'Every statement is mapped to a framework control', !unmapped.length, unmapped.length ? `Not mapped: ${unmapped.map((i) => i.num).join(', ')}. Check the suggested controls under each statement, or use “Map controls”.` : '', refsOf(unmapped));
   push('language', 'Every statement uses "must" or "shall"', !of('language', 'error').length, of('language', 'error').map((i) => i.message).join(' '), refsOf(of('language', 'error')));
   push('language', 'No non-mandatory or unmeasurable wording', !of('language', 'warning').length, of('language', 'warning').map((i) => i.message).join(' '), refsOf(of('language', 'warning')));
+  const noFramework = of('coverage', 'error').filter((i) => i.section === 'references');
+  push('coverage', 'Every statement is mapped to a framework control', !unmapped.length && !noFramework.length,
+    unmapped.length ? `Not mapped: ${unmapped.map((i) => i.num).join(', ')}. Check the suggested controls under each statement, or use “Map controls”.` : noFramework.map((i) => i.message).join(' '), refsOf(unmapped));
   if (sub.type) reqs.forEach((r) => push('coverage', r.topic, r.met, r.met ? `Covered by ${r.num}` : 'Not covered', r.met ? [{ target: `st-${r.statementId}`, label: r.num }] : []));
   else push('coverage', 'Policy type recognised for a coverage checklist', null, 'No checklist for this policy type: coverage not assessed.');
   sub.metrics.forEach((m) => push('benchmarks', `${m.metric}: ${m.shown} (${m.num})`, m.pass, `Baseline ${m.baseline}. ${m.source}`, [{ target: `st-${m.statementId}`, label: m.num }]));
@@ -508,10 +531,19 @@ export function reviewPolicy(p, opts = {}) {
   push('consistency', 'Statements do not contradict each other', !sub.conflicts.some((c) => !/^POL-/.test(c.b)), '');
   push('consistency', 'Consistent with other published policies', !sub.conflicts.some((c) => /^POL-/.test(c.b)), sub.conflicts.filter((c) => /^POL-/.test(c.b)).map((c) => `${c.metric}: ${c.a} vs ${c.b}`).join('; '));
 
+  const scores = Object.fromEntries(REVIEW_CATEGORIES.map((c) => [c.key, categoryScore(checklist.filter((x) => x.cat === c.key))]));
+  const active = REVIEW_CATEGORIES.filter((c) => scores[c.key] != null);
+  const wsum = active.reduce((a, c) => a + c.weight, 0);
+  const overall = wsum ? Math.round(active.reduce((a, c) => a + scores[c.key] * c.weight, 0) / wsum) : 0;
+  const substanceWarnings = lint.issues.filter((i) => ['coverage', 'benchmarks', 'consistency'].includes(i.cat) && i.severity !== 'info').length;
+  const verdict = lint.errors ? 'not_ready' : (substanceWarnings || overall < 85) ? 'needs_work' : 'ready';
+  lint.score = overall;
+  lint.grade = gradeOf(overall);
+
   return {
     verdict,
     verdictLabel: { ready: 'Ready', needs_work: 'Needs work', not_ready: 'Not ready' }[verdict],
-    overall, scores, checklist,
+    overall, grade: lint.grade, scores, checklist,
     type: sub.type,
     gaps: reqs.filter((r) => !r.met),
     requirements: reqs,

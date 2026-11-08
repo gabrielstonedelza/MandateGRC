@@ -364,3 +364,51 @@ export function autoMapStatements(statements, controls, opts = {}) {
   }
   return out;
 }
+
+/**
+ * Crosswalk: controls in other frameworks equivalent to the ones a statement is mapped to (or is
+ * about to be). Equivalence comes from the concept table: controls listed under the same topic are
+ * treated as equivalents; topics the statement itself matches rank first. Controls the table does
+ * not know (custom frameworks) fall back to the statement's own best match in that framework.
+ * @returns [{ control, via, reason }] at most one per framework, only frameworks not yet represented.
+ */
+export function crosswalkFor(baseIds, controls, { text = '', exclude = [], frameworks = null } = {}) {
+  if (!baseIds?.length || !controls?.length) return [];
+  const { byKey } = indexOf(controls);
+  const byId = new Map(controls.map((c) => [c.id, c]));
+  const base = baseIds.map((id) => byId.get(id)).filter(Boolean);
+  const have = new Set(base.map((c) => c.framework_code));
+  const skip = new Set([...baseIds, ...exclude]);
+  const allow = frameworks ? new Set(frameworks) : null;
+  const inText = new Set(conceptsIn(text).map((h) => h.concept.id));
+  const scores = new Map();
+  for (const b of base) {
+    const key = keyOf(b);
+    for (const concept of CONCEPTS) {
+      const own = concept.refs.find((r) => r.key === key);
+      if (!own) continue;
+      const boost = inText.has(concept.id) ? 2 : 1;
+      for (const r of concept.refs) {
+        const c = byKey.get(r.key);
+        if (!c || skip.has(c.id) || have.has(c.framework_code) || (allow && !allow.has(c.framework_code))) continue;
+        const e = scores.get(c.id) || { control: c, score: 0, via: keyOf(b), reason: concept.label };
+        const add = r.w * own.w * boost;
+        if (add > e.score) { e.via = keyOf(b); e.reason = concept.label; }
+        e.score += add;
+        scores.set(c.id, e);
+      }
+    }
+  }
+  const best = new Map();
+  for (const e of [...scores.values()].sort((a, b) => b.score - a.score)) {
+    if (!best.has(e.control.framework_code)) best.set(e.control.framework_code, e);
+  }
+  // Frameworks the table does not reach: use the statement's own best match there, if confident.
+  const missing = [...new Set(controls.map((c) => c.framework_code))].filter((fw) => !have.has(fw) && !best.has(fw) && (!allow || allow.has(fw)));
+  if (missing.length && text) {
+    for (const x of suggestMappings(text, controls, { frameworks: missing, perFramework: 1, exclude: [...skip] })) {
+      if (x.confidence === 'high') best.set(x.control.framework_code, { control: x.control, score: x.score, via: keyOf(base[0]), reason: 'same topic in this framework' });
+    }
+  }
+  return [...best.values()].map(({ control, via, reason }) => ({ control, via, reason }));
+}

@@ -11,6 +11,7 @@
     "start": "node --disable-warning=ExperimentalWarning server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
     "backup": "node --disable-warning=ExperimentalWarning tools/backup.mjs",
-    "docs:screenshots": "node tools/docs-screenshots.mjs"
+    "docs:screenshots": "node tools/docs-screenshots.mjs",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.mjs\""
   }
 }

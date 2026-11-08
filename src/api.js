@@ -645,8 +645,12 @@ function validatePolicyContent(b, org) {
       controls: validControls(s?.controls || []),
       // Auto-map suggestions the analyst rejected, so they are not offered again.
       dismissed: validControls(Array.isArray(s?.dismissed) ? s.dismissed.slice(0, 60) : []),
+      // "Qualitative: accepted": the analyst's reason why no number applies. Who and when are stamped by the server.
+      ...(s?.qualitative?.reason ? { qualitative: { reason: str(s.qualitative.reason, { name: `Reason for statement 4.${i + 1}`, min: 3, max: 300 }) } } : {}),
     })),
-    roles: b.roles.map((r) => ({ role: str(r?.role, { name: 'Role', max: 120 }), responsibility: str(r?.responsibility, { name: 'Responsibility', max: 1000 }) })),
+    // `owner: true` tags the row that holds the policy-owner role (at most one).
+    roles: b.roles.map((r) => ({ role: str(r?.role, { name: 'Role', max: 120 }), responsibility: str(r?.responsibility, { name: 'Responsibility', max: 1000 }), ...(r?.owner === true ? { owner: true } : {}) }))
+      .map((r, i, all) => (r.owner && all.findIndex((x) => x.owner) !== i ? { role: r.role, responsibility: r.responsibility } : r)),
     enforcement: str(b.enforcement, { name: 'Compliance & Enforcement', max: 5000 }),
     ref_controls: validControls(b.ref_controls || []),
     related_docs: str(b.related_docs, { name: 'Related documents', max: 2000 }),
@@ -661,13 +665,33 @@ route('PUT', '/api/policies/:id', R.WRITE, (ctx) => {
   const v = validatePolicyContent(ctx.body, p.org_id);
   const next = v.effective_date ? addMonths(v.effective_date, v.review_cycle_months) : null;
   const ts = nowIso();
+  const qualitativeEvents = stampQualitative(v.statements, p.statements, ctx.user, ts);
   run(`UPDATE policies SET title=?, owner=?, classification=?, effective_date=?, review_cycle_months=?, next_review_date=?, purpose=?, scope=?,
        statements=?, roles=?, enforcement=?, ref_controls=?, related_docs=?, policy_type=?, updated_by=?, updated_at=? WHERE id=?`,
     v.title, v.owner, v.classification, v.effective_date, v.review_cycle_months, next, v.purpose, v.scope,
     JSON.stringify(v.statements), JSON.stringify(v.roles), v.enforcement, JSON.stringify(v.ref_controls), v.related_docs, v.policy_type, ctx.user.id, ts, p.id);
   audit(ctx.actor, 'policy.updated', 'policy', p.id, { code: p.code, statements: v.statements.length });
+  for (const e of qualitativeEvents) audit(ctx.actor, e.action, 'policy', p.id, { code: p.code, ...e.details });
   return policyDetail(loadPolicy(p.id, p.org_id));
 });
+
+// Keep who/when for qualitative acceptances that did not change; stamp new ones. Returns audit events.
+function stampQualitative(next, prev, user, ts) {
+  const before = new Map((prev || []).map((s) => [s.id, s]));
+  const events = [];
+  next.forEach((s, i) => {
+    const old = before.get(s.id)?.qualitative;
+    const num = `4.${i + 1}`;
+    if (s.qualitative) {
+      if (old && old.reason === s.qualitative.reason) s.qualitative = old;
+      else {
+        s.qualitative = { reason: s.qualitative.reason, by: user.username, at: ts };
+        events.push({ action: 'policy.statement_qualitative_accepted', details: { statement: num, reason: s.qualitative.reason } });
+      }
+    } else if (old) events.push({ action: 'policy.statement_qualitative_cleared', details: { statement: num } });
+  });
+  return events;
+}
 
 route('POST', '/api/policies/:id/submit', R.WRITE, (ctx) => {
   const p = loadPolicy(pid(ctx.params.id), ctx.user.org_id);
