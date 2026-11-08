@@ -240,7 +240,8 @@ route('POST', '/api/auth/invite', null, (ctx) => {
   const inv = loadInvite(ctx.body.code);
   const u = inv.user_id ? get('SELECT username, name FROM users WHERE id = ?', inv.user_id) : null;
   const org = get('SELECT name FROM orgs WHERE id = ?', inv.org_id);
-  return { purpose: inv.purpose, role: inv.role || null, org: org?.name, username: u?.username || null, name: u?.name || null, expires_at: inv.expires_at };
+  const link = inv.purpose === 'recover' && inv.created_by === inv.user_id; // self-issued: adding another browser
+  return { purpose: link ? 'link' : inv.purpose, role: inv.role || null, org: org?.name, username: u?.username || null, name: u?.name || null, expires_at: inv.expires_at };
 }, { public: true });
 
 route('POST', '/api/auth/register/options', null, (ctx) => {
@@ -263,7 +264,7 @@ route('POST', '/api/auth/register/verify', null, (ctx) => {
   tx(() => {
     const inv = get('SELECT * FROM invites WHERE code_hash = ?', ch.data.invite);
     if (!inv || inv.used_at || inv.expires_at < nowIso()) throw new HttpError(400, 'This code has already been used or has expired.');
-    purpose = inv.purpose;
+    purpose = inv.purpose === 'recover' && inv.created_by === inv.user_id ? 'link' : inv.purpose;
     if (inv.purpose === 'join') {
       const username = checkNewUsername(ctx.body.username);
       const name = str(ctx.body.name, { name: 'Display name', max: 80 }) || username;
@@ -325,6 +326,27 @@ route('POST', '/api/auth/onboarded', R.ANY, (ctx) => {
   const outcome = oneOf(ctx.body.outcome, ['completed', 'skipped'], { name: 'Outcome' });
   run('UPDATE users SET onboarded_at = COALESCE(onboarded_at, ?) WHERE id = ?', nowIso(), ctx.user.id);
   audit(ctx.actor, `onboarding.${outcome}`, 'user', ctx.user.id, { step: int(ctx.body.step, { name: 'Step', min: 0, max: 100, required: false, fallback: 0 }) });
+  return { ok: true };
+});
+
+// ----- Add another browser or device -----
+// Passkeys live in the browser or password manager that created them, so a new browser has none.
+// A signed-in user can issue a short-lived, single-use code for themselves and redeem it in the new
+// browser to create a passkey there. It reuses the recovery-code mechanism (stored hashed, one use).
+const LINK_MINUTES = 15;
+route('POST', '/api/auth/link-code', R.ANY, (ctx) => {
+  limit(ctx, 'link-code', 10, 'code requests');
+  const code = generateCode();
+  const expires = new Date(Date.now() + LINK_MINUTES * 60_000).toISOString();
+  tx(() => {
+    run("DELETE FROM invites WHERE user_id = ? AND created_by = ? AND purpose = 'recover' AND used_at IS NULL", ctx.user.id, ctx.user.id);
+    run('INSERT INTO invites(code_hash, org_id, purpose, user_id, created_by, expires_at) VALUES (?,?,?,?,?,?)', codeHash(code), ctx.user.org_id, 'recover', ctx.user.id, ctx.user.id, expires);
+  });
+  audit(ctx.actor, 'auth.link_code_issued', 'user', ctx.user.id, { minutes: LINK_MINUTES });
+  return { code, expires_at: expires, minutes: LINK_MINUTES };
+});
+route('DELETE', '/api/auth/link-code', R.ANY, (ctx) => {
+  run("DELETE FROM invites WHERE user_id = ? AND created_by = ? AND purpose = 'recover' AND used_at IS NULL", ctx.user.id, ctx.user.id);
   return { ok: true };
 });
 

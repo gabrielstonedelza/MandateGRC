@@ -12,17 +12,33 @@ const toB64 = (buf) => {
 };
 
 export const passkeysSupported = () => !!(window.PublicKeyCredential && navigator.credentials?.create);
+// Browsers that expose the WebAuthn API but refuse every passkey request (no prompt is ever shown).
+// DuckDuckGo for Mac is built on Apple's WebKit view without passkey access.
+export const passkeyUnsupportedBrowser = () => (/\bDdg\/|DuckDuckGo/i.test(navigator.userAgent) ? 'DuckDuckGo' : null);
 export const ipHost = () => /^(\d+\.){3}\d+$|^\[.*\]$/.test(location.hostname);
 
+// How long the browser took to refuse tells "you closed the prompt" apart from "the browser never
+// showed one" (private window, passkeys turned off, page not focused), which need different advice.
+const timed = async (kind, fn) => {
+  const t0 = performance.now();
+  try { return await fn(); } catch (e) {
+    const ms = Math.round(performance.now() - t0);
+    try { e.elapsedMs = ms; e.kind = kind; } catch { /* frozen error object */ }
+    console.warn(`[passkey] ${kind} failed after ${ms} ms: ${e?.name}: ${e?.message}`);
+    throw e;
+  }
+};
+export const refusedInstantly = (e) => e?.name === 'NotAllowedError' && typeof e.elapsedMs === 'number' && e.elapsedMs < 1500;
+
 export async function createPasskey(publicKey) {
-  const cred = await navigator.credentials.create({
+  const cred = await timed('create', () => navigator.credentials.create({
     publicKey: {
       ...publicKey,
       challenge: toBuf(publicKey.challenge),
       user: { ...publicKey.user, id: toBuf(publicKey.user.id) },
       excludeCredentials: (publicKey.excludeCredentials || []).map((c) => ({ ...c, id: toBuf(c.id) })),
     },
-  });
+  }));
   return {
     id: cred.id,
     clientDataJSON: toB64(cred.response.clientDataJSON),
@@ -32,13 +48,13 @@ export async function createPasskey(publicKey) {
 }
 
 export async function getPasskey(publicKey) {
-  const cred = await navigator.credentials.get({
+  const cred = await timed('get', () => navigator.credentials.get({
     publicKey: {
       ...publicKey,
       challenge: toBuf(publicKey.challenge),
       allowCredentials: (publicKey.allowCredentials || []).map((c) => ({ ...c, id: toBuf(c.id) })),
     },
-  });
+  }));
   return {
     id: cred.id,
     clientDataJSON: toB64(cred.response.clientDataJSON),

@@ -739,3 +739,13 @@ textarea.fx-done { animation: fx-done 1.2s ease-out; }
   .amd-o { grid-template-columns: 18px 1fr auto; }
   .amd-o .am-t { grid-column: 2 / -1; }
 }
+
+/* ---------- Passkey in another browser: help and one-time codes ---------- */
+.auth-help { text-align: left; font-size: 12.5px; line-height: 1.5; color: var(--text-2); background: rgba(226, 180, 87, .06); border: 1px solid rgba(226, 180, 87, .35); border-radius: 10px; padding: 12px 14px; }
+.auth-help > b { color: var(--text); display: block; margin-bottom: 4px; }
+.auth-help p { margin: 0 0 8px; }
+.auth-help ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.auth-help a { color: var(--gold); }
+.link-steps { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
+.secret.expired { color: var(--muted); border-color: var(--border-2); text-decoration: line-through; }
+.auth-help small { display: block; margin-top: 8px; font-size: 11px; overflow-wrap: anywhere; }

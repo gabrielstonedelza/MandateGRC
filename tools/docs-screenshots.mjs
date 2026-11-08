@@ -383,6 +383,49 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await go('#/settings', '#sf', 600);
   await shot('49-settings');
 
+  console.log('Another browser: one-time code');
+  await go('#/account', '#link-code', 700);
+  await click('#link-code'); await waitFor('#lc'); await sleep(500);
+  await shot('48b-link-code', '.modal', 20);
+  const linkCode = await evaluate(`document.querySelector('#lc').textContent.trim()`);
+  await closeModals(); await sleep(300);
+  // Become a browser with no session and no passkeys: a virtual authenticator with nothing stored.
+  await send('Network.deleteCookies', { name: 'mandate_sid', url: BASE });
+  await send('WebAuthn.enable');
+  const { authenticatorId } = await send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+  await evaluate(`location.hash = '#/login'`); await send('Page.reload', { ignoreCache: true });
+  await waitFor('#pk-login'); await sleep(1200);
+  await click('#pk-login'); await waitFor('.auth-help', 15000); await sleep(400);
+  await shot('03b-no-passkey', '.auth-card', 24);
+  await evaluate(`location.hash = '#/register?code=${linkCode}'`); await sleep(300);
+  await send('Page.reload', { ignoreCache: true });
+  await waitFor('#code-form'); await sleep(400);
+  await evaluate(`document.querySelector('#code-form button[type=submit]').click()`);
+  await waitFor('#pk-form'); await sleep(1200);
+  await shot('48c-link-redeem', '.auth-card', 24);
+  await evaluate(`document.querySelector('#pk-form button[type=submit]').click()`);
+  await waitFor('.sidebar', 15000); await sleep(600);
+  const me1 = await evaluate(`fetch('/api/auth/me').then((r) => r.json()).then((j) => j.user?.username)`);
+  const reuse = await api('POST', '/api/auth/invite', { code: linkCode });
+  // Sign out and sign back in with the passkey this browser just created.
+  await send('Network.deleteCookies', { name: 'mandate_sid', url: BASE });
+  await evaluate(`location.hash = '#/login'`); await send('Page.reload', { ignoreCache: true });
+  await waitFor('#pk-login'); await sleep(1200);
+  await click('#pk-login'); await waitFor('.sidebar', 15000); await sleep(400);
+  const me2 = await evaluate(`fetch('/api/auth/me').then((r) => r.json()).then((j) => j.user?.username)`);
+  const keys = await api('GET', '/api/auth/passkeys');
+  console.log(`    redeemed as: ${me1} · code reusable: ${!reuse.error ? 'YES (bad)' : 'no'} · signed in again as: ${me2} · passkeys: ${keys.map((k) => k.label).join(', ')}`);
+  // A passkey creation the authenticator refuses (user verification fails): the help explains why.
+  await send('WebAuthn.setUserVerified', { authenticatorId, isUserVerified: false });
+  await send('Network.deleteCookies', { name: 'mandate_sid', url: BASE });
+  await send('Page.navigate', { url: BASE + '/?r=1#/register' }); await sleep(1200);
+  await waitFor('#pk-form'); await sleep(600);
+  await fill('[name=org_name]', 'Havens'); await fill('[name=username]', 'havens'); await sleep(1500);
+  await evaluate(`document.querySelector('#pk-form button[type=submit]').click()`);
+  await waitFor('.auth-help', 15000); await sleep(400);
+  const helpTitle = await evaluate(`document.querySelector('.auth-help b').textContent + ' | ' + document.querySelector('.auth-help small').textContent`);
+  console.log('    create refused:', helpTitle);
+
   console.log(`\nSaved ${fs.readdirSync(OUT).filter((f) => f.endsWith('.jpg')).length} screenshots to ${path.relative(ROOT, OUT)}`);
   ws.close();
   process.exit(0);
