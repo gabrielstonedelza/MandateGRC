@@ -134,6 +134,12 @@ Capabilities that are rare or missing across the market:
 
 ---
 
+## Control register & testing
+
+Policies state intent; controls prove operation. Each control in the register links the policy statements it implements and the framework requirements it satisfies, has an owner and a test frequency, and carries its test history and evidence. Designs are approved by someone other than their author; the design approver cannot test the control; a failed test opens a failure that only someone other than the tester can close. Every step is written to the hash-chained audit trail.
+
+Schema changes are versioned migrations (`src/migrations.js`): additive, backed up before they run, and reversible with `node tools/migrate.mjs down <id>`.
+
 ## Roles
 
 | Role | Can |

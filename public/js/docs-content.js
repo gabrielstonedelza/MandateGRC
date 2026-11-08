@@ -488,6 +488,41 @@ export const DOCS = [
     ],
   },
   {
+    id: 'control-register', group: 'Risk & compliance', title: 'Control register & testing', minutes: 6,
+    summary: 'Prove your controls operate: link them to policy statements and frameworks, test them on schedule, and handle failures.',
+    blocks: [
+      { p: 'A policy says what must happen. A <b>control</b> is what you actually do to make it happen, such as “MFA enforced on the VPN” or “Quarterly privileged access review”. The control register lists every control you operate, links each one to the policy statements it implements and the framework requirements it satisfies, and records the tests that prove it works.' },
+      { figure: img('c1-control-register'), caption: 'The control register: owner, frameworks, test frequency, last and next test, current result and operating effectiveness. Filter by framework, result, overdue or status.' },
+      { h: 'Create a control' },
+      { steps: [
+        { t: 'Click New control', d: 'Open <b>Control Register</b> in the sidebar and click <b>New control</b>.' },
+        { t: 'Describe how it operates', d: 'Give it a name and a description precise enough for someone else to test it. Choose the <b>control owner</b> (who keeps it running) and the <b>test frequency</b>: continuous, monthly, quarterly, every 6 months or annually.' },
+        { t: 'Link framework requirements and policy statements', d: 'Click <b>Choose requirements</b> to pick the framework controls it satisfies. Then tick the policy statements it implements; statements already mapped to the chosen requirements are listed first. Optionally attach existing evidence.' },
+        { t: 'Get the design approved', d: 'A new control starts as a <b>design draft</b>. An approver who did not design it reviews and clicks <b>Approve design</b>. Testing can only start after approval, so every test checks an agreed design. The first test is due 30 days after approval.' },
+      ] },
+      { figure: img('c2-control-chain'), caption: 'The assurance chain on each control: the policy statement it implements, the control itself, the framework requirements (with their source), the latest test and the evidence.' },
+      { h: 'Record a test' },
+      { steps: [
+        { t: 'Click Record test', d: 'On the control, click <b>Record test</b>. Enter the test date, choose the result (<b>Pass</b>, <b>Fail</b> or <b>Exception</b>) and describe your methodology: what you inspected, sampled or observed. Failures and exceptions need notes.', img: img('c3-record-test') },
+        { t: 'Attach evidence', d: 'Tick the evidence that supports the test, or expand <b>Add new evidence</b> to record a link to it on the spot. The evidence is linked to the control too.' },
+        { t: 'See the result', d: 'The control\'s last-tested date, next due date, result and operating effectiveness update immediately, and the test is written to the audit trail. Test records cannot be edited or deleted.' },
+      ] },
+      { h: 'When a test fails' },
+      { p: 'A failed test opens a <b>failure</b>. It appears in the dashboard action queue, and the control shows as failing until a later test passes. Remediate the cause, then someone <b>other than the tester</b> clicks <b>Close…</b> on the failed test and records what was done. Record a new passing test to show the control operates again.' },
+      { figure: img('c4-test-history'), caption: 'Test history: every test with its result, effectiveness, tester, methodology and evidence. The tester cannot close their own failure.' },
+      { h: 'Separation of duties' },
+      { table: { head: ['Action', 'Who cannot do it'], rows: [
+        ['Approve a control\'s design', 'The person who created or last changed the design'],
+        ['Test a control', 'The approver of its design'],
+        ['Close a failed test', 'The person who recorded the failed test'],
+      ] } },
+      { p: 'Changing an approved control\'s name, description, frequency, framework requirements or linked statements resets its design to draft, so the change is approved before the next test. Changing the owner or evidence does not.' },
+      { h: 'On the dashboard' },
+      { figure: img('c5-dashboard-controls'), caption: 'Control testing on the dashboard: passing, failing, overdue for test and not yet tested, plus how effective the tested controls are. Overdue tests and open failures also appear in the action queue.' },
+      { tip: 'Retire a control you no longer operate instead of deleting it: its tests and evidence stay on record for auditors.' },
+    ],
+  },
+  {
     id: 'evidence', group: 'Risk & compliance', title: 'Collect evidence', minutes: 3,
     summary: 'Prove controls operate, and keep the proof fresh.',
     blocks: [

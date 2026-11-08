@@ -8,6 +8,7 @@ import { frameworksView } from './views/frameworks.js';
 import { evidenceView } from './views/evidence.js';
 import { attestationsView } from './views/attestations.js';
 import { auditView } from './views/audit.js';
+import { controlsView, controlDetailView } from './views/controls.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -27,6 +28,7 @@ const NAV = [
     { href: '#/exceptions', label: 'Exceptions', icon: 'exception', show: can.read },
   ] },
   { group: 'Comply', items: [
+    { href: '#/controls', label: 'Control Register', icon: 'control', show: can.read },
     { href: '#/frameworks', label: 'Frameworks & Controls', icon: 'framework', show: can.read },
     { href: '#/evidence', label: 'Evidence', icon: 'evidence', show: can.read },
   ] },
@@ -47,6 +49,8 @@ const ROUTES = [
   [/^\/attestations$/, attestationsView, 'Attestations'],
   [/^\/risks$/, risksView, 'Risk Register', can.read],
   [/^\/exceptions$/, exceptionsView, 'Exceptions', can.read],
+  [/^\/controls$/, controlsView, 'Control Register', can.read],
+  [/^\/controls\/(\d+)$/, controlDetailView, 'Control Register', can.read],
   [/^\/frameworks(?:\/([A-Za-z0-9_-]+))?$/, frameworksView, 'Frameworks & Controls', can.read],
   [/^\/evidence$/, evidenceView, 'Evidence', can.read],
   [/^\/audit$/, auditView, 'Audit Trail', can.audit],
