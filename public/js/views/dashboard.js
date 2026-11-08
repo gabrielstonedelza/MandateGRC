@@ -52,7 +52,7 @@ export async function dashboardView(el) {
       ${kpi('Stale evidence', d.evidence.stale, `${d.evidence.total} items · ${d.evidence.dueSoon} due soon`, d.evidence.stale ? 'bad' : 'good')}
     </div>
 
-    ${controlsCard(d.controls)}
+    ${controlsCard(d.controls, d.findings)}
 
     <div class="grid g3">
       <div class="card span2">
@@ -105,13 +105,13 @@ function kpi(label, value, foot, tone = '') {
 }
 
 // Control testing: passing / failing / overdue, and how effective the tested controls are.
-function controlsCard(c) {
+function controlsCard(c, f) {
   if (!c) return '';
   const e = c.effectiveness;
   const rated = c.approved || 1;
   const EFF = [['effective', 'Effective'], ['partially_effective', 'Partially effective'], ['ineffective', 'Ineffective'], ['not_rated', 'Not yet rated']];
   return html`<div class="card ctl-dash">
-    <div class="card-h"><h3>Control testing</h3><span class="muted">${c.active} active controls · ${c.draft} awaiting design approval</span><a class="right small" href="#/controls">Control register →</a></div>
+    <div class="card-h"><h3>Control testing & findings</h3><span class="muted">${c.active} active controls · ${c.draft} awaiting design approval</span><a class="right small" href="#/controls">Control register →</a></div>
     <div class="card-b">
       ${c.active ? html`<div class="grid g4">
         <a class="card kpi" href="#/controls"><div class="label">Passing</div><div class="value good">${c.passing}</div><div class="foot">${c.exception} with exception</div></a>
@@ -119,6 +119,12 @@ function controlsCard(c) {
         <a class="card kpi" href="#/controls"><div class="label">Overdue for test</div><div class="value ${c.overdue ? 'bad' : 'good'}">${c.overdue}</div><div class="foot">of ${c.approved} approved</div></a>
         <a class="card kpi" href="#/controls"><div class="label">Not yet tested</div><div class="value ${c.not_tested ? 'warn' : ''}">${c.not_tested}</div><div class="foot">approved, awaiting first test</div></a>
       </div>
+      ${f ? html`<div class="grid g4 mt">
+        <a class="card kpi" href="#/findings"><div class="label">Open findings</div><div class="value">${f.open}</div><div class="foot">${f.unowned} without an owner</div></a>
+        <a class="card kpi" href="#/findings"><div class="label">Overdue findings</div><div class="value ${f.overdue ? 'bad' : 'good'}">${f.overdue}</div><div class="foot">past their due date</div></a>
+        <a class="card kpi" href="#/findings"><div class="label">Critical / high</div><div class="value ${f.by_severity.Critical ? 'bad' : ''}">${f.by_severity.Critical + f.by_severity.High}</div><div class="foot">${f.by_severity.Critical} critical</div></a>
+        <a class="card kpi" href="#/findings"><div class="label">Awaiting closure</div><div class="value">${f.awaiting_closure}</div><div class="foot">needs a second approver</div></a>
+      </div>` : ''}
       <div class="section-label mt">Operating effectiveness</div>
       <div class="eff" role="img" aria-label="${EFF.map(([k, l]) => `${l}: ${e[k]}`).join(', ')}">${EFF.map(([k]) => (e[k] ? html`<i class="e-${k}" data-w="${Math.round((e[k] / rated) * 100)}"></i>` : ''))}</div>
       <div class="eff-legend">${EFF.map(([k, l]) => html`<span class="e-${k}">${l} ${e[k]}</span>`)}</div>`

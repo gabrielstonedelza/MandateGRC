@@ -140,6 +140,10 @@ Policies state intent; controls prove operation. Each control in the register li
 
 Schema changes are versioned migrations (`src/migrations.js`): additive, backed up before they run, and reversible with `node tools/migrate.mjs down <id>`.
 
+## Findings & corrective action
+
+Failed control tests and expired exceptions open findings automatically; audit and self-assessment findings are logged by hand. Each finding has a severity, an owner, a plan and a due date, and moves Open → In Progress → Remediated → Closed (or Risk-Accepted). Closure needs attached evidence and an approver who is neither the owner nor the person who requested closure.
+
 ## Roles
 
 | Role | Can |

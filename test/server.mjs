@@ -40,7 +40,7 @@ export async function startServer() {
   });
   for (let i = 0; i < 100; i++) { try { await fetch(base + '/'); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
   const stop = () => { proc.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); };
-  return { base, stop };
+  return { base, stop, dbPath: path.join(dataDir, 'mandate.db') };
 }
 
 // A signed-in client. `client(base)` creates a new workspace; `client(base, { invite })` joins one.

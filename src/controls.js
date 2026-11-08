@@ -7,6 +7,7 @@
 import { all, get, run, tx, nextCode } from './db.js';
 import { audit } from './audit.js';
 import { HttpError, bad, today, nowIso, addMonths, addDays, parseJson, str, date, oneOf, idList } from './util.js';
+import { openFindingForFailedTest, findingForTest } from './findings.js';
 
 export const FREQUENCIES = { continuous: 1, monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
 export const FREQUENCY_LABELS = { continuous: 'Continuous (monthly check)', monthly: 'Monthly', quarterly: 'Quarterly', semiannual: 'Every 6 months', annual: 'Annually' };
@@ -88,7 +89,7 @@ export function registerControlRoutes({ route, R, pid, notFound, forbidden, cont
     });
     const frameworks = c.framework_ids.map((id) => cmap.get(id)).filter(Boolean);
     const tests = all('SELECT * FROM control_tests WHERE control_id = ? ORDER BY tested_on DESC, id DESC', c.id).map((t) => ({
-      ...t, evidence_ids: parseJson(t.evidence_ids, []), tester_name: userName(t.tester_id), closed_by_name: userName(t.closed_by),
+      ...t, evidence_ids: parseJson(t.evidence_ids, []), tester_name: userName(t.tester_id), closed_by_name: userName(t.closed_by), finding: findingForTest(t.id) || null,
     }));
     const evIds = [...new Set([...c.evidence_ids, ...tests.flatMap((t) => t.evidence_ids)])];
     const evidence = evIds.map((id) => get('SELECT * FROM evidence WHERE id = ? AND org_id = ?', id, org)).filter(Boolean).map(evidenceView)
@@ -184,7 +185,7 @@ export function registerControlRoutes({ route, R, pid, notFound, forbidden, cont
     const methodology = str(b.methodology, { name: 'Methodology', min: 10, max: 4000, required: true });
     const notes = str(b.notes, { name: 'Notes', max: 4000, min: result === 'pass' ? 0 : 10, required: result !== 'pass' });
     const evidence_ids = idList(b.evidence_ids || [], { name: 'Evidence' }).filter((id) => get('SELECT id FROM evidence WHERE id = ? AND org_id = ?', id, org));
-    let testId, due;
+    let testId, due, finding = null;
     tx(() => {
       testId = Number(run(`INSERT INTO control_tests(org_id, control_id, tester_id, tested_on, result, effectiveness, methodology, notes, evidence_ids, failure_status)
         VALUES (?,?,?,?,?,?,?,?,?,?)`, org, c.id, ctx.user.id, tested_on, result, effectiveness, methodology, notes, JSON.stringify(evidence_ids), result === 'fail' ? 'open' : null).lastInsertRowid);
@@ -195,9 +196,12 @@ export function registerControlRoutes({ route, R, pid, notFound, forbidden, cont
       run('UPDATE org_controls SET last_tested_on = ?, next_due = ?, result = ?, effectiveness = ?, evidence_ids = ?, updated_at = ? WHERE id = ?',
         latest.tested_on, due, latest.result, latest.effectiveness, JSON.stringify(allEvidence), nowIso(), c.id);
       audit(ctx.actor, 'control.tested', 'control', c.id, { code: c.code, test_id: testId, tested_on, result, effectiveness, evidence: evidence_ids.length, next_due: due });
-      if (result === 'fail') audit(ctx.actor, 'control.test_failed', 'control', c.id, { code: c.code, test_id: testId, finding: 'open' });
+      if (result === 'fail') {
+        finding = openFindingForFailedTest({ org, control: c, testId, testedOn: tested_on, notes, methodology, actor: ctx.actor });
+        audit(ctx.actor, 'control.test_failed', 'control', c.id, { code: c.code, test_id: testId, finding: finding.code });
+      }
     });
-    return { id: testId, next_due: due, failure_opened: result === 'fail' };
+    return { id: testId, next_due: due, failure_opened: result === 'fail', finding };
   });
 
   // Close a failed test once remediated. Never by the tester alone.
@@ -207,6 +211,8 @@ export function registerControlRoutes({ route, R, pid, notFound, forbidden, cont
     if (!t) throw notFound('Control test');
     const c = ctlRow(t.control_id, org);
     if (t.failure_status !== 'open') throw new HttpError(409, 'Only open failures can be closed.');
+    const fnd = findingForTest(t.id);
+    if (fnd) throw new HttpError(409, `This failure is tracked as finding ${fnd.code}. Close it there: closure needs evidence and a second approver.`);
     if (t.tester_id === ctx.user.id) {
       audit(ctx.actor, 'control.failure_close_blocked_sod', 'control', c.id, { code: c.code, test_id: t.id });
       throw forbidden('Separation of duties: you recorded this failed test, so someone else must confirm it is remediated and close it.');
@@ -231,7 +237,7 @@ export function registerControlRoutes({ route, R, pid, notFound, forbidden, cont
       const failures = all(`SELECT ct.*, oc.code, oc.name, oc.owner_id FROM control_tests ct JOIN org_controls oc ON oc.id = ct.control_id
         WHERE ct.org_id = ? AND ct.failure_status = 'open' ORDER BY ct.tested_on`, org);
       const actions = [];
-      failures.forEach((f) => actions.push({ kind: 'control', severity: 'critical', title: `${f.code} ${f.name} failed its test on ${f.tested_on}`,
+      failures.filter((f) => !findingForTest(f.id)).forEach((f) => actions.push({ kind: 'control', severity: 'critical', title: `${f.code} ${f.name} failed its test on ${f.tested_on}`,
         detail: f.tester_id === me.id ? 'Open failure. Someone other than you must confirm remediation and close it.' : 'Open failure: remediate, then close it with a note.', link: `#/controls/${f.control_id}` }));
       approved.filter((c) => c.overdue).forEach((c) => actions.push({ kind: 'control', severity: 'high', title: `${c.code} ${c.name} test overdue`, detail: `Was due ${c.next_due}${c.owner_name ? ` · owner ${c.owner_name}` : ''}`, link: `#/controls/${c.id}` }));
       approved.filter((c) => c.due_soon && c.owner_id === me.id).forEach((c) => actions.push({ kind: 'control', severity: 'medium', title: `${c.code} ${c.name} test due ${c.next_due}`, detail: 'You own this control.', link: `#/controls/${c.id}` }));

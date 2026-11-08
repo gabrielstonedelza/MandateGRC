@@ -36,3 +36,24 @@ test('control test records are immutable except for failure closure', () => {
   db.exec("UPDATE control_tests SET failure_status = 'closed', closed_by = 1, close_note = 'fixed' WHERE id = 1");
   assert.equal(db.prepare('SELECT failure_status FROM control_tests WHERE id = 1').get().failure_status, 'closed');
 });
+
+test('004 converts open Phase 1 test failures into findings, once', async () => {
+  const { MIGRATIONS: all } = await import('../src/migrations.js');
+  const db = base();
+  db.exec('CREATE TABLE policies (id INTEGER PRIMARY KEY); CREATE TABLE risks (id INTEGER PRIMARY KEY); CREATE TABLE exceptions (id INTEGER PRIMARY KEY);');
+  // Apply only 003, record an open failure, then apply 004.
+  db.exec('CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, description TEXT, applied_at TEXT)');
+  db.exec(all[0].up);
+  db.prepare('INSERT INTO schema_migrations(id, applied_at) VALUES (?, ?)').run(all[0].id, 'x');
+  db.exec("INSERT INTO org_controls(id, org_id, code, name, owner_id) VALUES (1, 1, 'CTL-001', 'VPN MFA', 1)");
+  db.exec("INSERT INTO control_tests(org_id, control_id, tester_id, tested_on, result, effectiveness, methodology, notes, failure_status) VALUES (1, 1, 1, '2026-10-01', 'fail', 'ineffective', 'm', 'legacy profile', 'open')");
+  runMigrations(db, null);
+  const f = db.prepare('SELECT * FROM findings').all();
+  assert.equal(f.length, 1);
+  assert.equal(f[0].code, 'FND-001');
+  assert.equal(f[0].source, 'control_test');
+  assert.equal(f[0].due_date, '2026-10-31');
+  assert.equal(f[0].owner_id, 1);
+  runMigrations(db, null);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM findings').get().n, 1);
+});

@@ -2,6 +2,7 @@ import { html, mount, $, on, state, can, GET, POST, PUT, DEL, toast, fail, modal
 import { riskLevel } from '../lint.js';
 import { heatMap, LIKELIHOOD, IMPACT, ctrlLabel } from './shared.js';
 import { controlPicker } from './policies.js';
+import { sevPill, statusPill } from './findings.js';
 
 export async function risksView(el) {
   let [risks, policies] = await Promise.all([GET('/api/risks'), GET('/api/policies')]);
@@ -92,6 +93,7 @@ function riskForm(r, policies, done) {
         <div class="full small dim" id="ale"></div>
         <label class="f full"><span>Policies that govern this risk</span><select name="policy_ids" multiple size="5" ${editable ? '' : 'disabled'}>${policies.filter((p) => p.status !== 'retired').map((p) => html`<option value="${p.id}" ${v.policy_ids.includes(p.id) ? 'selected' : ''}>${p.code} ${p.title}</option>`)}</select></label>
         <div class="full"><div class="section-label">Mitigating controls</div><div class="chips" id="rc"></div></div>
+        ${r ? html`<div class="full"><div class="section-label">Findings</div><div id="rfind" class="muted small">Loading…</div></div>` : ''}
       </div>
     </form>`,
     footer: html`${r && can.admin() ? html`<button class="btn danger" data-del>${icon('trash')} Delete</button>` : ''}<span class="right"></span><button class="btn ghost" data-close>${editable ? 'Cancel' : 'Close'}</button>${editable ? html`<button class="btn primary" data-save>${r ? 'Save risk' : 'Add risk'}</button>` : ''}`,
@@ -108,6 +110,10 @@ function riskForm(r, policies, done) {
       };
       const drawControls = () => mount($('#rc', el), html`${controlIds.map((id) => html`<span class="chip" title="${cmap.get(id)?.title || ''}"><b>${ctrlLabel(cmap.get(id))}</b>${editable ? html`<button data-rm="${id}">×</button>` : ''}</span>`)}${editable ? html`<button class="btn xs" type="button" data-pick>${icon('link')} Link controls</button>` : ''}${!controlIds.length && !editable ? html`<span class="muted small">None</span>` : ''}`);
       recalc(); drawControls();
+      // Findings linked to this risk: open corrective actions and accepted residual gaps.
+      if (r) GET(`/api/findings?risk_id=${r.id}`).then((list) => mount($('#rfind', el), list.length
+        ? html`<ul class="plain-list">${list.map((f) => html`<li><a href="#/findings/${f.id}">${f.code}</a> ${sevPill(f.severity)} ${statusPill(f.status)} <span>${f.title}</span>${f.overdue ? html` <b class="bad-text small">overdue</b>` : ''}</li>`)}</ul>`
+        : html`<span>No findings linked.</span>`)).catch(() => {});
       form.addEventListener('input', recalc);
       form.addEventListener('change', recalc);
       on(el, 'click', '[data-rm]', (e, b) => { controlIds = controlIds.filter((x) => x !== Number(b.dataset.rm)); drawControls(); });

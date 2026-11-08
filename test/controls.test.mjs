@@ -77,26 +77,21 @@ test('recording a passing test with evidence updates last tested, next due and t
   assert.ok(c.evidence.some((e) => e.id === ev), 'evidence is linked to the control');
 });
 
-test('a failed test opens a failure in the action queue; the tester cannot close it, someone else can', async () => {
+test('a failed test opens a finding; the old failure-close route defers to it', async () => {
   const { id } = await newControl(admin);
   await approver.post(`/api/control-register/${id}/approve-design`);
   await assert.rejects(analyst.post(`/api/control-register/${id}/tests`, { tested_on: today(), result: 'fail', methodology: 'Tried a login without MFA.' }), (e) => e.status === 400, 'a failure needs notes');
   const r = await analyst.post(`/api/control-register/${id}/tests`, { tested_on: today(), result: 'fail', methodology: 'Tried a login without MFA.', notes: 'Legacy VPN profile still allows password-only logins.' });
   assert.equal(r.failure_opened, true);
+  assert.match(r.finding.code, /^FND-\d{3}$/);
   const c = await admin.get(`/api/control-register/${id}`);
   assert.equal(c.result, 'fail');
   assert.equal(c.effectiveness, 'ineffective');
   assert.equal(c.open_failures, 1);
+  assert.equal(c.tests[0].finding.code, r.finding.code);
   const dash = await admin.get('/api/dashboard');
   assert.ok(dash.controls.failing >= 1);
-  assert.ok(dash.actions.some((a) => a.kind === 'control' && /failed/.test(a.title)));
-  const testId = c.tests[0].id;
-  await assert.rejects(analyst.post(`/api/control-tests/${testId}/close`, { note: 'Fixed the legacy profile.' }), (e) => e.status === 403);
-  await admin.post(`/api/control-tests/${testId}/close`, { note: 'Legacy profile removed; retest scheduled.' });
-  const after = await admin.get(`/api/control-register/${id}`);
-  assert.equal(after.open_failures, 0);
-  assert.equal(after.tests[0].failure_status, 'closed');
-  assert.equal(after.tests[0].closed_by_name, admin.user.name);
+  await assert.rejects(admin.post(`/api/control-tests/${c.tests[0].id}/close`, { note: 'Fixed the legacy profile.' }), (e) => e.status === 409);
 });
 
 test('overdue tests surface on the dashboard and in the action queue', async () => {
@@ -134,7 +129,7 @@ test('retired controls cannot be tested; every action is in the hash-chained aud
   await admin.post(`/api/control-register/${id}/status`, { status: 'retired', reason: 'Replaced by SSO-enforced MFA.' });
   await assert.rejects(analyst.post(`/api/control-register/${id}/tests`, { tested_on: today(), result: 'pass', methodology: 'Sampled logins; all used MFA.' }), (e) => e.status === 409);
   const actions = new Set((await admin.get('/api/audit?q=control.&limit=500')).rows.map((r) => r.action));
-  for (const a of ['control.created', 'control.design_approved', 'control.tested', 'control.test_failed', 'control.failure_closed', 'control.failure_close_blocked_sod', 'control.design_reset', 'control.retired', 'control.updated'])
+  for (const a of ['control.created', 'control.design_approved', 'control.tested', 'control.test_failed', 'control.design_reset', 'control.retired', 'control.updated'])
     assert.ok(actions.has(a), `missing ${a}`);
   assert.equal((await admin.get('/api/audit/verify')).ok, true);
 });
