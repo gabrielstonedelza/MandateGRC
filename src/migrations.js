@@ -1,0 +1,130 @@
+// Versioned, reversible schema migrations. Each one is additive (new tables, columns, triggers),
+// never rewrites or drops existing data on the way up, and has a `down` that removes exactly what it
+// added. Before any pending migration runs, the database is copied with VACUUM INTO, so a release can
+// always be rolled back to the previous file as well.
+//   node tools/migrate.mjs status | down <id>
+import fs from 'node:fs';
+
+export const MIGRATIONS = [
+  {
+    id: '003-control-register',
+    description: 'Control register and control test records',
+    up: `
+      -- A control the organization operates (distinct from the framework catalogue in "controls").
+      CREATE TABLE IF NOT EXISTS org_controls (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        owner_id INTEGER REFERENCES users(id),
+        frequency TEXT NOT NULL DEFAULT 'quarterly' CHECK (frequency IN ('continuous','monthly','quarterly','semiannual','annual')),
+        framework_ids TEXT NOT NULL DEFAULT '[]',
+        statement_refs TEXT NOT NULL DEFAULT '[]',
+        evidence_ids TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','retired')),
+        design_status TEXT NOT NULL DEFAULT 'draft' CHECK (design_status IN ('draft','approved')),
+        design_author INTEGER REFERENCES users(id),
+        design_approved_by INTEGER REFERENCES users(id),
+        design_approved_at TEXT,
+        last_tested_on TEXT,
+        next_due TEXT,
+        result TEXT NOT NULL DEFAULT 'not_tested' CHECK (result IN ('pass','fail','exception','not_tested')),
+        effectiveness TEXT CHECK (effectiveness IN ('effective','partially_effective','ineffective')),
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        UNIQUE (org_id, code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_org_controls_org ON org_controls(org_id);
+
+      -- One record per test performed. The test itself is immutable; only the closure of a failure
+      -- (by someone other than the tester) is written later.
+      CREATE TABLE IF NOT EXISTS control_tests (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        control_id INTEGER NOT NULL REFERENCES org_controls(id) ON DELETE CASCADE,
+        tester_id INTEGER NOT NULL REFERENCES users(id),
+        tested_on TEXT NOT NULL,
+        result TEXT NOT NULL CHECK (result IN ('pass','fail','exception')),
+        effectiveness TEXT NOT NULL CHECK (effectiveness IN ('effective','partially_effective','ineffective')),
+        methodology TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        evidence_ids TEXT NOT NULL DEFAULT '[]',
+        failure_status TEXT CHECK (failure_status IN ('open','closed')),
+        closed_by INTEGER REFERENCES users(id),
+        closed_at TEXT,
+        close_note TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_control_tests_control ON control_tests(control_id, tested_on);
+      CREATE INDEX IF NOT EXISTS idx_control_tests_org ON control_tests(org_id);
+      CREATE TRIGGER IF NOT EXISTS control_tests_immutable
+        BEFORE UPDATE OF control_id, tester_id, tested_on, result, effectiveness, methodology, notes, evidence_ids, created_at ON control_tests
+        BEGIN SELECT RAISE(ABORT, 'control test records are immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS control_tests_no_delete BEFORE DELETE ON control_tests
+        WHEN (SELECT COUNT(*) FROM org_controls WHERE id = OLD.control_id) > 0
+        BEGIN SELECT RAISE(ABORT, 'control test records cannot be deleted'); END;
+    `,
+    down: `
+      DROP TRIGGER IF EXISTS control_tests_no_delete;
+      DROP TRIGGER IF EXISTS control_tests_immutable;
+      DROP TABLE IF EXISTS control_tests;
+      DROP TABLE IF EXISTS org_controls;
+    `,
+  },
+];
+
+const ensureTable = (db) => db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY, description TEXT, applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')))`);
+
+export function appliedMigrations(db) {
+  ensureTable(db);
+  return db.prepare('SELECT id, applied_at FROM schema_migrations ORDER BY id').all();
+}
+
+export function runMigrations(db, dbPath, { log = () => {} } = {}) {
+  ensureTable(db);
+  const done = new Set(db.prepare('SELECT id FROM schema_migrations').all().map((r) => r.id));
+  const pending = MIGRATIONS.filter((m) => !done.has(m.id));
+  if (!pending.length) return [];
+  // A brand-new database has nothing to protect; an existing one is copied first.
+  const hasData = db.prepare('SELECT COUNT(*) n FROM users').get().n > 0;
+  if (hasData && dbPath) {
+    const backup = `${dbPath}.pre-${pending[0].id}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    db.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
+    try { fs.chmodSync(backup, 0o600); } catch { /* best effort */ }
+    log(`Backed up the database to ${backup} before migrating.`);
+  }
+  for (const m of pending) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(m.up);
+      db.prepare('INSERT INTO schema_migrations(id, description) VALUES (?, ?)').run(m.id, m.description);
+      db.exec('COMMIT');
+      log(`Applied migration ${m.id}: ${m.description}`);
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  return pending.map((m) => m.id);
+}
+
+// Reverts one migration and every migration applied after it, newest first.
+export function revertMigration(db, id) {
+  const idx = MIGRATIONS.findIndex((m) => m.id === id);
+  if (idx < 0) throw new Error(`Unknown migration ${id}`);
+  ensureTable(db);
+  const done = new Set(db.prepare('SELECT id FROM schema_migrations').all().map((r) => r.id));
+  const reverted = [];
+  for (const m of MIGRATIONS.slice(idx).reverse()) {
+    if (!done.has(m.id)) continue;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(m.down);
+      db.prepare('DELETE FROM schema_migrations WHERE id = ?').run(m.id);
+      db.exec('COMMIT');
+      reverted.push(m.id);
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  return reverted;
+}

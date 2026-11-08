@@ -364,6 +364,46 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await shot('42-evidence-form');
   await closeModals(); await sleep(300);
 
+  console.log('Control register');
+  // A control linked to a statement of the published sample Access Control policy; a colleague approves its design.
+  const ctlMeta = await api('GET', '/api/meta');
+  const fwId = (f, r) => ctlMeta.controls.find((c) => c.framework_code === f && c.ref === r).id;
+  const pols = await api('GET', '/api/control-register-statements');
+  const acp = pols.find((x) => /Access Control/.test(x.title) && x.status === 'published') || pols[0];
+  const mfaSt = acp.statements.find((x) => /multi-factor/i.test(x.text)) || acp.statements[0];
+  const me = (await api('GET', '/api/auth/me')).user;
+  const ctlA = await api('POST', '/api/control-register', { name: 'MFA enforced on VPN and production access', description: 'The VPN gateway and production bastion reject any login without a second factor (Okta Verify or a FIDO2 key).', owner_id: me.id, frequency: 'quarterly',
+    framework_ids: [fwId('ISO27001', '8.5'), fwId('NIST80053', 'IA-2'), fwId('SOC2', 'CC6.1'), fwId('CIS', '6')], statement_refs: [{ policy_id: acp.id, statement_id: mfaSt.id }] });
+  const ctlB = await api('POST', '/api/control-register', { name: 'Quarterly privileged access review', description: 'System owners recertify every privileged account each quarter; removals are ticketed.', owner_id: me.id, frequency: 'quarterly',
+    framework_ids: [fwId('ISO27001', '8.2'), fwId('NIST80053', 'AC-2')], statement_refs: [] });
+  await api('POST', '/api/control-register', { name: 'Encrypted backups restored monthly', description: 'One production backup is restored to an isolated host each month and checked.', owner_id: me.id, frequency: 'monthly', framework_ids: [fwId('ISO27001', '8.13')], statement_refs: [] });
+  // Designs are approved by a separate approver (Kwame), never by their author.
+  const appInv = await api('POST', '/api/invites', { role: 'approver', days: 1 });
+  const kwame = {};
+  const ko = await apiAs(kwame, 'POST', '/api/auth/register/options', { code: appInv.code });
+  const kr = await apiAs(kwame, 'POST', '/api/auth/register/verify', { challengeId: ko.challengeId, credential: softCredential(ko.publicKey), username: 'kwame.boateng', name: 'Kwame Boateng' });
+  kwame.csrf = kr.csrf;
+  await apiAs(kwame, 'POST', `/api/control-register/${ctlA.id}/approve-design`, {});
+  await apiAs(kwame, 'POST', `/api/control-register/${ctlB.id}/approve-design`, {});
+  await api('POST', `/api/control-register/${ctlB.id}/tests`, { tested_on: '2026-03-02', result: 'pass', methodology: 'Reviewed the Q1 recertification export for all 14 privileged accounts.' });
+  await go('#/controls', '.ctl-table', 800);
+  await shot('c1-control-register');
+  await go(`#/controls/${ctlA.id}`, '.chain', 800);
+  await shot('c2-control-chain', '.chain', 14, 'start');
+  await click('#test'); await waitFor('#tf'); await sleep(400);
+  await evaluate(`(() => { const f = document.querySelector('#tf'); f.querySelector('input[value=fail]').click(); f.elements.namedItem('methodology').value = 'Attempted VPN and bastion logins with password only from a test account; sampled 25 production logins from October.'; f.elements.namedItem('notes').value = 'Legacy VPN profile "contractors-old" still accepts password-only logins.'; f.querySelector('input[value=fail]').dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await sleep(300);
+  await shot('c3-record-test', '.modal', 20);
+  await click('#t-save'); await waitFor('[data-close-fail]', 8000); await sleep(700);
+  const ctlState = await evaluate(`({ result: document.querySelector('.page-head .pill.s-critical')?.textContent, failBtnDisabled: document.querySelector('[data-close-fail]')?.disabled })`);
+  console.log('    after failed test:', JSON.stringify(ctlState));
+  await evaluate(`document.querySelector('#tests-h').scrollIntoView({ block: 'start' })`); await sleep(300);
+  await shot('c4-test-history', '#tests-h', 14, 'start');
+  await go('#/', '.ctl-dash', 900);
+  const dashCtl = await evaluate(`[...document.querySelectorAll('.ctl-dash .kpi .value')].map((x) => x.textContent).join(',')`);
+  console.log('    dashboard passing,failing,overdue,not tested:', dashCtl);
+  await shot('c5-dashboard-controls', '.ctl-dash');
+
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);
   await click('#verify'); await waitFor('.notice.good'); await sleep(500);

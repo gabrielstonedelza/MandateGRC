@@ -2,6 +2,7 @@
 // Multi-tenant: every row of workspace data carries an org_id, and every query filters on it.
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
+import { runMigrations } from './migrations.js';
 import path from 'node:path';
 
 // Files created by MandateGRC (database, WAL journal) are private to the service account.
@@ -285,6 +286,9 @@ if (addedSample) {
   }
 }
 
+// Versioned migrations (src/migrations.js): additive, reversible, with a backup before each run.
+runMigrations(db, DB_PATH, { log: (m) => { if (!process.env.MANDATEGRC_QUIET) console.log(`  ${m}`); } });
+
 try { fs.chmodSync(DB_PATH, 0o600); } catch { /* best effort */ }
 
 export const all = (sql, ...p) => db.prepare(sql).all(...p);
@@ -304,7 +308,7 @@ export function tx(fn) {
 }
 
 // Human-friendly sequential codes (POL-001, RSK-001…) numbered per workspace.
-const CODE_TABLES = new Set(['policies', 'risks', 'exceptions']);
+const CODE_TABLES = new Set(['policies', 'risks', 'exceptions', 'org_controls']);
 export function nextCode(table, prefix, orgId) {
   if (!CODE_TABLES.has(table)) throw new Error('bad table');
   const rows = all(`SELECT code FROM ${table} WHERE org_id = ? AND code LIKE ?`, orgId, prefix + '-%');
