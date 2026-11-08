@@ -69,6 +69,15 @@ export const DOCS = [
         { t: 'Using a security key or another device?', d: 'Expand <b>Using a security key or another device?</b> and type your username first. MandateGRC then asks your browser for that account\'s passkey specifically.' },
       ] },
       { warn: 'Sessions end after 30 minutes of inactivity (your administrator can change this) and always after 8 hours. Just sign in again; your work is saved on the server.' },
+      { h: 'Signing in from a different browser or computer' },
+      { p: 'A passkey is saved by the browser or password manager that created it. A passkey made in Chrome is kept in your Google Password Manager; one made in Safari is kept in iCloud Keychain. So if you created your passkey in one browser and try to sign in from another, the browser finds no passkey and MandateGRC explains your options.' },
+      { figure: img('03b-no-passkey'), caption: 'What you see when the browser has no passkey for MandateGRC, or when the prompt was cancelled.' },
+      { steps: [
+        { t: 'In the browser you already use, get a one-time code', d: 'Sign in as usual, open <b>My account</b> and click <b>Get a one-time code</b> under <b>Sign in on another browser or computer</b>. The code works once and expires after 15 minutes.', img: img('48b-link-code') },
+        { t: 'In the new browser, enter the code', d: 'Open the code link, or click <b>Sign in</b> then <b>Use a one-time code</b> and type it. Click <b>Continue</b>.' },
+        { t: 'Create a passkey in the new browser', d: 'Click <b>Create passkey</b> and approve with Touch ID, Face ID or Windows Hello. You are signed in, and from now on this browser has its own passkey, listed under <b>My account</b>.', img: img('48c-link-redeem') },
+      ] },
+      { tip: 'If your passkey is on your phone, you don\'t need a code: click <b>Sign in with passkey</b>, choose <i>Use a phone or tablet</i>, and scan the QR code with your phone.' },
     ],
   },
   {
@@ -525,6 +534,7 @@ export const DOCS = [
         { t: 'Open My account', d: 'Click the key icon next to your name at the bottom of the sidebar.', img: img('48-account') },
         { t: 'Add a backup passkey', d: 'Click <b>Add a passkey</b> and approve on the device you want to add, such as your phone or a hardware security key. Keeping two passkeys means losing one device never locks you out.' },
         { t: 'Remove an old device', d: 'Click <b>Remove</b> next to a passkey you no longer use. You always need at least one.' },
+        { t: 'Sign in on another browser', d: 'Click <b>Get a one-time code</b> and enter it in the other browser to create a passkey there. See <a href="#/docs/sign-in">Sign in with a passkey</a> for the full steps.' },
       ] },
     ],
   },
@@ -548,6 +558,8 @@ export const DOCS = [
     summary: 'Answers to the questions people ask most.',
     blocks: [
       { faq: [
+        ['"The passkey request was cancelled" straight away, with no prompt', 'Your browser refused before showing a passkey prompt. Common causes: a browser without passkey support (such as DuckDuckGo for Mac), a private or incognito window, or the browser\'s password manager being turned off. Use a normal window in Safari, Chrome, Edge or Firefox.'],
+        ['"No passkey found" in a different browser', 'Passkeys stay in the browser or password manager that created them. In the browser where you are signed in, open <b>My account → Get a one-time code</b>, then enter it in the new browser (<b>Sign in → Use a one-time code</b>) to create a passkey there. If your passkey is on your phone, choose <i>Use a phone or tablet</i> in the prompt instead.'],
         ['How does auto-mapping decide which controls to suggest?', 'It recognises about a hundred common policy topics from the wording (incident response plans, triage, MFA, log retention, backups, supplier contracts and so on) and suggests the controls auditors expect for each, in the frameworks you choose. Anything it does not recognise is ranked by shared themes and words with the control titles. It runs in your browser with no AI service, and every suggestion waits for you to confirm it. If a statement gets no suggestion, the wording is too vague to match; map it with <b>Map controls</b>.'],
         ['"The passkey request was cancelled or timed out"', 'Click the button again and approve the prompt within two minutes. In Safari, make sure you click the button itself (not press Enter in another field). If you have no Touch ID, choose "Use phone or tablet" or a security key in the browser prompt.'],
         ['"Passkeys don\'t work on IP addresses"', 'Open MandateGRC by its name (mandategrc.app, or http://localhost when running it yourself), never by an IP address such as 127.0.0.1.'],

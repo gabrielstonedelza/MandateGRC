@@ -1,7 +1,7 @@
 // Public site for mandategrc.app: landing page, passkey sign-in and registration, privacy policy, terms.
 import { html, raw, mount, $, $$, on, api, state, icon, LOGO, ring } from './core.js';
 import { renderDocs } from './docs.js';
-import { passkeysSupported, ipHost, createPasskey, getPasskey, passkeyError, deviceLabel, prefetcher } from './passkey.js';
+import { passkeysSupported, passkeyUnsupportedBrowser, ipHost, createPasskey, getPasskey, passkeyError, refusedInstantly, deviceLabel, prefetcher } from './passkey.js';
 
 export const PUBLIC_ROUTES = ['/', '/login', '/register', '/privacy', '/terms'];
 const DOMAIN = 'mandategrc.app';
@@ -225,7 +225,44 @@ function hostWarning() {
   return html`<div class="notice warn small">Passkeys don't work on IP addresses. Open <a href="${url}">${url}</a> instead.</div>`;
 }
 function supportWarning() {
+  const named = passkeyUnsupportedBrowser();
+  if (named) return html`<div class="notice bad small">${named}'s browser doesn't support passkeys yet, so it can't create or use one. Open MandateGRC in Safari, Chrome, Edge or Firefox.</div>`;
   return passkeysSupported() ? '' : html`<div class="notice bad small">This browser doesn't support passkeys. Use a current version of Safari, Chrome, Edge or Firefox.</div>`;
+}
+
+// Shown when creating a passkey fails. A refusal within a moment means the browser never showed a
+// prompt; a later one means the prompt was closed or timed out.
+function createHelp(err) {
+  if (!(err instanceof DOMException)) return html`<div class="notice bad small">${err.message}</div>`;
+  if (err.name !== 'NotAllowedError') return html`<div class="notice bad small">${passkeyError(err)}</div>`;
+  const instant = refusedInstantly(err);
+  return html`<div class="auth-help">
+    <b>${instant ? 'Your browser refused to create a passkey without showing a prompt.' : 'The passkey prompt was closed before it finished.'}</b>
+    <ol>${instant ? html`
+      <li><b>Using DuckDuckGo, or another browser without passkey support?</b> Open MandateGRC in Safari, Chrome, Edge or Firefox.</li>
+      <li><b>Private or incognito window?</b> Some browsers can't save passkeys there. Use a normal window.</li>
+      <li><b>Passkeys turned off?</b> In Chrome, check that the Google Password Manager is on; in Firefox, update to the latest version. Safari and Chrome on a Mac work best.</li>
+      <li><b>Click the button itself</b> with this tab and window in front, then wait for the prompt.</li>`
+      : html`
+      <li>Click <b>Create passkey</b> again and approve with Touch ID, Face ID or Windows Hello.</li>
+      <li>If the browser asks <i>where</i> to save it, choose iCloud Keychain, Google Password Manager or “this device”. All work.</li>
+      <li>No fingerprint reader? Choose <i>Use a phone or tablet</i> and scan the QR code to save the passkey on your phone.</li>
+      <li>The prompt closes itself after two minutes. Approve it promptly.</li>`}
+    </ol>
+    <small class="muted">Browser said: ${err.name}${err.message ? `: ${err.message}` : ''}${typeof err.elapsedMs === 'number' ? ` (after ${(err.elapsedMs / 1000).toFixed(1)} s)` : ''}</small></div>`;
+}
+
+// Shown when the passkey prompt is cancelled or finds no passkey in this browser.
+function noPasskeyHelp() {
+  return html`<div class="auth-help">
+    <b>No passkey came up, or the request was cancelled.</b>
+    <p>A passkey is saved by the browser or password manager that created it. If you created yours in another browser (for example Chrome) it will not appear here (for example in Safari or Firefox).</p>
+    <ol>
+      <li><b>Cancelled by mistake?</b> Click <b>Sign in with passkey</b> again and approve.</li>
+      <li><b>Passkey on your phone?</b> Click <b>Sign in with passkey</b>, choose <i>Use a phone or tablet</i> (or <i>another device</i>), and scan the QR code.</li>
+      <li><b>Passkey in another browser?</b> Sign in there, open <b>My account → Sign in on another browser</b>, get a one-time code, and <a href="#/register?code=">enter it here</a>. This browser gets its own passkey.</li>
+      <li><b>Lost every passkey?</b> Ask your workspace administrator for a recovery code.</li>
+    </ol></div>`;
 }
 
 export function loginPage(root, { message, onSignedIn } = {}) {
@@ -240,6 +277,7 @@ export function loginPage(root, { message, onSignedIn } = {}) {
       <details class="auth-more"><summary>Using a security key or another device?</summary>
         <label class="f"><span>Username <em>(optional hint)</em></span><input id="pk-user" autocomplete="username webauthn" maxlength="32" placeholder="your-username"></label>
       </details>
+      <p class="auth-alt">New browser or computer? <a href="#/register?code=" id="to-link">Use a one-time code</a></p>
       <p class="auth-alt">New here? <a href="#/register">Create a free workspace</a></p>
       <p class="auth-fine">${icon('lock')} No password is ever created or stored.</p>
     </div></section>`);
@@ -264,7 +302,10 @@ export function loginPage(root, { message, onSignedIn } = {}) {
       .then((credential) => api('POST', '/api/auth/login/verify', { challengeId: opts.challengeId, credential }))
       .then(async (r) => { state.csrf = r.csrf; state.me = r.user; await onSignedIn?.(); })
       .catch((err) => {
-        mount($('#auth-msg', root), html`<div class="notice bad small">${err instanceof DOMException ? passkeyError(err) : err.message}</div>`);
+        // NotAllowedError also covers "this browser has no passkey for this site", which is what
+        // happens in a browser other than the one where the passkey was created.
+        const none = err instanceof DOMException && err.name === 'NotAllowedError';
+        mount($('#auth-msg', root), none ? noPasskeyHelp() : html`<div class="notice bad small">${err instanceof DOMException ? passkeyError(err) : err.message}</div>`);
         pf.refresh();
       })
       .finally(() => { btn.disabled = false; btn.classList.remove('busy'); });
@@ -311,7 +352,7 @@ export async function registerPage(root, { onSignedIn } = {}) {
           <button class="btn primary lg block" type="submit">${icon('fingerprint')} Create passkey &amp; workspace</button>
         </form>
         <div id="auth-msg"></div>
-        <p class="auth-alt">Joining a team, or recovering access? <a href="#" id="to-code">Enter an invite or recovery code</a></p>
+        <p class="auth-alt">Joining a team, adding a new browser, or recovering access? <a href="#" id="to-code">Enter a code</a></p>
         <p class="auth-alt">Already have a passkey? <a href="#/login">Sign in</a></p>
         <p class="auth-fine">${icon('lock')} Your biometric stays on your device. We store only a public key.</p>`);
       const form = $('#pk-form', root);
@@ -337,7 +378,7 @@ export async function registerPage(root, { onSignedIn } = {}) {
             sample: form.elements.namedItem('sample').checked,
           }))
           .then(done)
-          .catch((err) => { msg(err instanceof DOMException ? passkeyError(err) : err.message); btn.disabled = false; pf.refresh(); });
+          .catch((err) => { mount($('#auth-msg', root), createHelp(err)); btn.disabled = false; pf.refresh(); });
       });
       return;
     }
@@ -345,10 +386,10 @@ export async function registerPage(root, { onSignedIn } = {}) {
     if (mode === 'code') {
       mount($('#reg', root), html`
         <div class="reg-steps"><span class="on">1 · Code</span><i></i><span>2 · Passkey</span></div>
-        <h1>Join with a code</h1>
-        <p class="dim">Enter the invite your administrator sent you, or a recovery code if you lost your passkey.</p>
+        <h1>Enter your code</h1>
+        <p class="dim">Enter the invite your administrator sent you, a one-time code from <b>My account</b> in a browser where you are signed in, or a recovery code if you lost your passkeys.</p>
         <form id="code-form" class="stack">
-          <label class="f"><span>Invite or recovery code</span><input id="code" class="code-input" value="${preset}" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="one-time-code" maxlength="40" required autofocus></label>
+          <label class="f"><span>Invite, one-time or recovery code</span><input id="code" class="code-input" value="${preset}" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="one-time-code" maxlength="40" required autofocus></label>
           <button class="btn primary lg block" type="submit">Continue ${icon('arrow')}</button>
         </form>
         <div id="auth-msg"></div>
@@ -363,11 +404,12 @@ export async function registerPage(root, { onSignedIn } = {}) {
     }
 
     // mode === 'redeem'
-    const join = invite.purpose === 'join';
+    const join = invite.purpose === 'join', link = invite.purpose === 'link';
     mount($('#reg', root), html`
       <div class="reg-steps"><span class="on">1 · Code</span><i></i><span class="on">2 · Passkey</span></div>
-      <h1>${join ? `Join ${invite.org || 'the workspace'}` : 'Recover your account'}</h1>
+      <h1>${join ? `Join ${invite.org || 'the workspace'}` : link ? 'Add this browser' : 'Recover your account'}</h1>
       <p class="dim">${join ? html`You're joining as <b>${roleName(invite.role)}</b>. Choose a username. No email or password needed.`
+        : link ? html`This code is for <b>@${invite.username}</b>. Create a passkey in this browser, and you can sign in here from now on.`
         : html`This code is for <b>@${invite.username}</b>. Create a new passkey on this device to regain access.`}</p>
       <form id="pk-form" class="stack" novalidate>
         ${join ? html`
@@ -395,7 +437,7 @@ export async function registerPage(root, { onSignedIn } = {}) {
       createPasskey(opts.publicKey)
         .then((credential) => api('POST', '/api/auth/register/verify', { challengeId: opts.challengeId, credential, label: field('label'), username: field('username'), name: field('display_name') }))
         .then(done)
-        .catch((err) => { msg(err instanceof DOMException ? passkeyError(err) : err.message); btn.disabled = false; pf.refresh(); });
+        .catch((err) => { mount($('#auth-msg', root), createHelp(err)); btn.disabled = false; pf.refresh(); });
     });
   };
 

@@ -26,6 +26,40 @@ function codeDialog(title, intro, code, expires) {
   });
 }
 
+// A short-lived code that lets this user add a passkey in another browser.
+function linkCodeDialog({ code, expires_at }, onClosed) {
+  const link = `${location.origin}/#/register?code=${encodeURIComponent(code)}`;
+  let timer;
+  modal({
+    title: 'Add another browser',
+    body: html`<div class="stack">
+      <p class="dim">In the other browser or computer, open the link below, or go to <b>Sign in → Use a one-time code</b> and type the code. Then approve with Touch ID, Face ID or Windows Hello to create a passkey there.</p>
+      <div class="secret" id="lc">${code}</div>
+      <label class="f"><span>Link for the other browser</span><input readonly value="${link}" id="lnk"></label>
+      <div class="row small"><span class="muted" id="lc-left"></span><span class="muted right">Works once, for @${state.me.username} only.</span></div>
+      <div class="notice warn small">${icon('lock')}<span>Anyone with this code can add a passkey to your account until it expires. Use it yourself; do not send it to anyone.</span></div></div>`,
+    footer: html`<button class="btn ghost" data-cancel-code>Cancel code</button><button class="btn" data-copy="code">Copy code</button><button class="btn" data-copy="link">${icon('link')} Copy link</button><button class="btn primary" data-close>Done</button>`,
+    onMount: ({ el, close }) => {
+      const left = $('#lc-left', el);
+      const tick = () => {
+        const ms = new Date(expires_at) - Date.now();
+        if (ms <= 0) { clearInterval(timer); left.textContent = 'Expired. Close this and get a new code.'; $('#lc', el).classList.add('expired'); return; }
+        const m = Math.floor(ms / 60000), sec = Math.floor((ms % 60000) / 1000);
+        left.textContent = `Expires in ${m}:${String(sec).padStart(2, '0')}`;
+      };
+      tick(); timer = setInterval(tick, 1000);
+      on(el, 'click', '[data-copy]', async (e, b) => {
+        const v = b.dataset.copy === 'code' ? code : link;
+        try { await navigator.clipboard.writeText(v); toast(b.dataset.copy === 'code' ? 'Code copied.' : 'Link copied.'); } catch { $('#lnk', el).select(); }
+      });
+      on(el, 'click', '[data-cancel-code]', async () => {
+        try { await DEL('/api/auth/link-code'); toast('Code cancelled. It can no longer be used.'); close(); } catch (err) { fail(err); }
+      });
+    },
+    onClose: () => { clearInterval(timer); onClosed?.(); },
+  });
+}
+
 export async function usersView(el) {
   let [users, invites] = await Promise.all([GET('/api/users'), GET('/api/invites')]);
   const draw = () => mount(el, html`
@@ -169,6 +203,16 @@ export async function accountView(el) {
             <button class="btn xs danger right" data-rm="${k.id}" ${keys.length <= 1 ? 'disabled title="You need at least one passkey"' : ''}>Remove</button></div>`)}
           ${keys.length < 2 ? html`<div class="notice info small">Add a second passkey (for example your phone or a hardware key) so you can still sign in if you lose this device.</div>` : ''}
         </div></div>
+      <div class="card link-card"><div class="card-h"><h3>Sign in on another browser or computer</h3></div>
+        <div class="card-b stack">
+          <p class="dim small">A passkey is saved by the browser or password manager that created it. A passkey made in Chrome may not appear in Safari, Firefox or on another computer, so signing in there fails with “no passkey found”.</p>
+          <ol class="link-steps">
+            <li>Click <b>Get a one-time code</b> here.</li>
+            <li>In the other browser, open the code link, or go to <b>Sign in → Use a one-time code</b> and type it.</li>
+            <li>Approve with Touch ID, Face ID or Windows Hello. That browser now has its own passkey.</li>
+          </ol>
+          <div><button class="btn primary sm" id="link-code">${icon('key')} Get a one-time code</button></div>
+        </div></div>
     </div>`);
   draw();
   // Prefetched so the passkey prompt runs directly inside the click (Safari requirement).
@@ -182,6 +226,10 @@ export async function accountView(el) {
       .then(async () => { toast('Passkey added.'); keys = await GET('/api/auth/passkeys'); draw(); })
       .catch((err) => { toast(err instanceof DOMException ? passkeyError(err) : err.message, 'err'); b.disabled = false; })
       .finally(() => pf.refresh());
+  });
+  on(el, 'click', '#link-code', async (e, b) => {
+    b.disabled = true;
+    try { linkCodeDialog(await POST('/api/auth/link-code'), async () => { keys = await GET('/api/auth/passkeys'); draw(); }); } catch (err) { fail(err); } finally { b.disabled = false; }
   });
   on(el, 'click', '[data-rm]', async (e, b) => {
     if (!(await confirmDialog({ title: 'Remove this passkey?', message: 'That device will no longer be able to sign in to MandateGRC.', confirm: 'Remove', danger: true }))) return;
