@@ -394,8 +394,8 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await evaluate(`(() => { const f = document.querySelector('#tf'); f.querySelector('input[value=fail]').click(); f.elements.namedItem('methodology').value = 'Attempted VPN and bastion logins with password only from a test account; sampled 25 production logins from October.'; f.elements.namedItem('notes').value = 'Legacy VPN profile "contractors-old" still accepts password-only logins.'; f.querySelector('input[value=fail]').dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await sleep(300);
   await shot('c3-record-test', '.modal', 20);
-  await click('#t-save'); await waitFor('[data-close-fail]', 8000); await sleep(700);
-  const ctlState = await evaluate(`({ result: document.querySelector('.page-head .pill.s-critical')?.textContent, failBtnDisabled: document.querySelector('[data-close-fail]')?.disabled })`);
+  await click('#t-save'); await waitFor('#tests-h a[href^="#/findings/"], .t a[href^="#/findings/"]', 8000); await sleep(700);
+  const ctlState = await evaluate(`({ result: document.querySelector('.page-head .pill.s-critical')?.textContent, finding: document.querySelector('.t a[href^="#/findings/"]')?.textContent })`);
   console.log('    after failed test:', JSON.stringify(ctlState));
   await evaluate(`document.querySelector('#tests-h').scrollIntoView({ block: 'start' })`); await sleep(300);
   await shot('c4-test-history', '#tests-h', 14, 'start');
@@ -403,6 +403,34 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   const dashCtl = await evaluate(`[...document.querySelectorAll('.ctl-dash .kpi .value')].map((x) => x.textContent).join(',')`);
   console.log('    dashboard passing,failing,overdue,not tested:', dashCtl);
   await shot('c5-dashboard-controls', '.ctl-dash');
+
+  console.log('Findings');
+  // An audit finding logged by hand, so the queue shows more than one source.
+  await api('POST', '/api/findings', { title: 'Contractor offboarding checklist not used', severity: 'Medium', source: 'audit', owner_id: kr.user.id, identified_on: '2026-10-02',
+    description: 'Internal audit sampled 6 contractor departures; 2 had no completed offboarding checklist.', remediation_plan: 'Make the checklist a required step in the HR ticket workflow.' });
+  await api('POST', '/api/findings', { title: 'Firewall rule review missed in Q2', severity: 'Low', source: 'self_assessment', owner_id: me.id, identified_on: '2026-07-01', due_date: '2026-09-30' });
+  await go('#/findings', '.card .t', 800);
+  await shot('f1-findings-queue');
+  const fnd = (await api('GET', `/api/findings?control_id=${ctlA.id}`))[0];
+  await api('PUT', `/api/findings/${fnd.id}`, { ...fnd, remediation_plan: 'Remove the legacy "contractors-old" VPN profile, migrate its 4 users to the MFA profile, and alert on any password-only login.', due_date: fnd.due_date });
+  await api('POST', `/api/findings/${fnd.id}/start`, {});
+  await go(`#/findings/${fnd.id}`, '#req', 800);
+  await shot('f2-finding');
+  await click('#req'); await waitFor('#rc'); await sleep(400);
+  await evaluate(`(() => { document.querySelector('#rc-note').value = 'Removed the contractors-old profile on 6 Nov and migrated its 4 users to the MFA profile; no password-only logins in the gateway logs since.'; document.querySelector('[data-rev]').click(); })()`);
+  await sleep(200);
+  await shot('f3-request-closure', '.modal', 20);
+  await click('#rc-ok'); await waitFor('#approve', 8000); await sleep(700);
+  const sod = await evaluate(`({ approveDisabled: document.querySelector('#approve').disabled, status: document.querySelector('.page-head .pill.s-requested')?.textContent })`);
+  console.log('    after closure request:', JSON.stringify(sod));
+  await shot('f4-awaiting-approval', '.page-head', 14, 'start');
+  await apiAs(kwame, 'POST', `/api/findings/${fnd.id}/approve-closure`, { note: 'Gateway log export reviewed.' });
+  await go('#/findings', '.t', 500);
+  await go(`#/findings/${fnd.id}`, '.timeline', 800);
+  const closed = await evaluate(`document.querySelector('.page-head .pill.s-closed')?.textContent`);
+  console.log('    after approval:', closed);
+  await evaluate(`document.querySelector('#fh-h').scrollIntoView({ block: 'center' })`); await sleep(300);
+  await shot('f5-finding-history', 'section[aria-labelledby=fh-h]', 14, 'start');
 
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);

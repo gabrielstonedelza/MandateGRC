@@ -9,6 +9,7 @@ import { evidenceView } from './views/evidence.js';
 import { attestationsView } from './views/attestations.js';
 import { auditView } from './views/audit.js';
 import { controlsView, controlDetailView } from './views/controls.js';
+import { findingsView, findingDetailView } from './views/findings.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -26,6 +27,7 @@ const NAV = [
   { group: 'Risk', items: [
     { href: '#/risks', label: 'Risk Register', icon: 'risk', show: can.read },
     { href: '#/exceptions', label: 'Exceptions', icon: 'exception', show: can.read },
+    { href: '#/findings', label: 'Findings', icon: 'flag', show: can.read, badge: 'findings' },
   ] },
   { group: 'Comply', items: [
     { href: '#/controls', label: 'Control Register', icon: 'control', show: can.read },
@@ -49,6 +51,8 @@ const ROUTES = [
   [/^\/attestations$/, attestationsView, 'Attestations'],
   [/^\/risks$/, risksView, 'Risk Register', can.read],
   [/^\/exceptions$/, exceptionsView, 'Exceptions', can.read],
+  [/^\/findings$/, findingsView, 'Findings', can.read],
+  [/^\/findings\/(\d+)$/, findingDetailView, 'Findings', can.read],
   [/^\/controls$/, controlsView, 'Control Register', can.read],
   [/^\/controls\/(\d+)$/, controlDetailView, 'Control Register', can.read],
   [/^\/frameworks(?:\/([A-Za-z0-9_-]+))?$/, frameworksView, 'Frameworks & Controls', can.read],
@@ -175,6 +179,13 @@ export async function refreshBadges() {
     const n = r.mine.filter((p) => !p.attested_at).length;
     const b = document.querySelector('[data-badge=attest]');
     if (b) { b.textContent = n; b.classList.toggle('hidden', !n); }
+  } catch { /* non-critical */ }
+  if (!can.read()) return;
+  try {
+    // Overdue findings, so a missed remediation date is visible from every page.
+    const n = (await GET('/api/findings')).filter((f) => f.overdue).length;
+    const b = document.querySelector('[data-badge=findings]');
+    if (b) { b.textContent = n; b.title = `${n} overdue finding${n === 1 ? '' : 's'}`; b.classList.toggle('hidden', !n); }
   } catch { /* non-critical */ }
 }
 

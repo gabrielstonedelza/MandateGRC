@@ -74,6 +74,64 @@ export const MIGRATIONS = [
       DROP TABLE IF EXISTS org_controls;
     `,
   },
+  {
+    id: '004-findings',
+    description: 'Findings and corrective action (CAP / POA&M)',
+    up: `
+      CREATE TABLE IF NOT EXISTS findings (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        code TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL CHECK (source IN ('control_test','self_assessment','audit','expired_exception','manual')),
+        severity TEXT NOT NULL CHECK (severity IN ('Critical','High','Medium','Low')),
+        control_id INTEGER REFERENCES org_controls(id) ON DELETE SET NULL,
+        control_test_id INTEGER REFERENCES control_tests(id) ON DELETE SET NULL,
+        policy_id INTEGER REFERENCES policies(id) ON DELETE SET NULL,
+        statement_id TEXT,
+        risk_id INTEGER REFERENCES risks(id) ON DELETE SET NULL,
+        exception_id INTEGER REFERENCES exceptions(id) ON DELETE SET NULL,
+        owner_id INTEGER REFERENCES users(id),
+        identified_on TEXT NOT NULL,
+        due_date TEXT,
+        remediation_plan TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open','In Progress','Remediated','Closed','Risk-Accepted')),
+        closure_note TEXT,
+        closure_evidence_ids TEXT NOT NULL DEFAULT '[]',
+        closure_requested_by INTEGER REFERENCES users(id),
+        closure_requested_at TEXT,
+        closed_by INTEGER REFERENCES users(id),
+        closed_at TEXT,
+        decision_note TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        UNIQUE (org_id, code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_findings_org ON findings(org_id, status);
+      -- One finding per failed test and per expired exception, so automatic creation is idempotent.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_findings_test ON findings(control_test_id) WHERE control_test_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_findings_exception ON findings(exception_id) WHERE exception_id IS NOT NULL;
+    `,
+    // Phase 1 stored open test failures on the test record; each becomes a finding.
+    data(db) {
+      const open = db.prepare(`SELECT ct.*, oc.owner_id, oc.code ccode, oc.name cname FROM control_tests ct JOIN org_controls oc ON oc.id = ct.control_id
+        WHERE ct.failure_status = 'open' AND NOT EXISTS (SELECT 1 FROM findings f WHERE f.control_test_id = ct.id)`).all();
+      for (const t of open) {
+        const max = db.prepare("SELECT code FROM findings WHERE org_id = ?").all(t.org_id).reduce((m, r) => Math.max(m, parseInt(r.code.split('-').pop(), 10) || 0), 0);
+        const due = new Date(Date.parse(t.tested_on) + 30 * 86400_000).toISOString().slice(0, 10);
+        db.prepare(`INSERT INTO findings(org_id, code, title, description, source, severity, control_id, control_test_id, owner_id, identified_on, due_date, created_by)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(t.org_id, `FND-${String(max + 1).padStart(3, '0')}`, `${t.ccode} ${t.cname} failed its test`, t.notes || t.methodology,
+          'control_test', 'High', t.control_id, t.id, t.owner_id, t.tested_on, due, t.tester_id);
+      }
+    },
+    down: `
+      DROP INDEX IF EXISTS idx_findings_exception;
+      DROP INDEX IF EXISTS idx_findings_test;
+      DROP TABLE IF EXISTS findings;
+    `,
+  },
 ];
 
 const ensureTable = (db) => db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -101,6 +159,7 @@ export function runMigrations(db, dbPath, { log = () => {} } = {}) {
     db.exec('BEGIN IMMEDIATE');
     try {
       db.exec(m.up);
+      m.data?.(db);
       db.prepare('INSERT INTO schema_migrations(id, description) VALUES (?, ?)').run(m.id, m.description);
       db.exec('COMMIT');
       log(`Applied migration ${m.id}: ${m.description}`);

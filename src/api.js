@@ -7,6 +7,7 @@ import {
 import { relyingParty, issueChallenge, consumeChallenge, verifyRegistration, verifyAssertion, b64url } from './webauthn.js';
 import { audit, verifyChain } from './audit.js';
 import { registerControlRoutes } from './controls.js';
+import { registerFindingRoutes } from './findings.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
 import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
@@ -465,7 +466,8 @@ route('GET', '/api/dashboard', R.READ, (ctx) => {
   risks.filter((r) => r.above_appetite).forEach((r) => actions.push({ kind: 'risk', severity: r.residual_level === 'critical' ? 'critical' : 'high', title: `${r.code} above risk appetite (residual ${r.residual})`, detail: r.title, link: '#/risks' }));
   policies.filter((p) => p.status === 'draft' && p.review_note).forEach((p) => actions.push({ kind: 'rework', severity: 'medium', title: `${p.code} returned for rework`, detail: p.review_note, link: `#/policies/${p.id}` }));
   const ctlSummary = controlsApi.summary(org, me);
-  actions.push(...ctlSummary.actions);
+  const fndSummary = findingsApi.summary(org, me);
+  actions.push(...ctlSummary.actions, ...fndSummary.actions);
   const sevOrder = { critical: 0, high: 1, medium: 2, info: 3 };
   actions.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
 
@@ -476,6 +478,7 @@ route('GET', '/api/dashboard', R.READ, (ctx) => {
     exceptions: { active: exceptions.filter((e) => e.status === 'Approved').length, requested: exceptions.filter((e) => e.status === 'Requested').length, expiring: exceptions.filter((e) => e.status === 'Approved' && e.expires_at <= soon).length, expired: exceptions.filter((e) => e.status === 'Expired').length },
     evidence: { total: evidence.length, stale: evidence.filter((e) => !e.fresh).length, dueSoon: evidence.filter((e) => e.due_soon).length },
     controls: ctlSummary.stats,
+    findings: fndSummary.stats,
     frameworks,
     actions: actions.slice(0, 25),
     recent: all('SELECT id, ts, username, action, entity, entity_id FROM audit_log WHERE org_id = ? ORDER BY id DESC LIMIT 8', org),
@@ -1015,7 +1018,7 @@ route('GET', '/api/evidence', R.READ, (ctx) => {
     return { ...e, control_ref: c?.ref, control_title: c?.title, framework_code: c?.framework_code };
   });
 });
-route('POST', '/api/evidence', R.WRITE, (ctx) => {
+route('POST', '/api/evidence', R.STEWARD, (ctx) => {
   const v = validateEvidence(ctx.body, ctx.user.org_id);
   const r = run('INSERT INTO evidence(org_id, control_id, title, description, location, owner, collected_on, valid_days, created_by) VALUES (?,?,?,?,?,?,?,?,?)',
     ctx.user.org_id, v.control_id, v.title, v.description, v.location, v.owner, v.collected_on, v.valid_days, ctx.user.id);
@@ -1173,3 +1176,4 @@ route('PUT', '/api/settings', R.ADMIN, (ctx) => {
 
 // ---------------- Control register & testing (src/controls.js) ----------------
 const controlsApi = registerControlRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, evidenceView, hydratePolicy });
+const findingsApi = registerFindingRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, hydratePolicy, evidenceView });

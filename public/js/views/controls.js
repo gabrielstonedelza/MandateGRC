@@ -3,6 +3,7 @@
 import { html, mount, $, on, state, can, GET, POST, PUT, toast, fail, modal, confirmDialog, fmtDate, pill, icon, todayStr } from '../core.js';
 import { controlPicker, MAP_DISCLAIMER } from './policies.js';
 import { fwName } from './shared.js';
+import { findingForm, sevPill, statusPill } from './findings.js';
 
 const FREQ = { continuous: 'Continuous', monthly: 'Monthly', quarterly: 'Quarterly', semiannual: 'Every 6 months', annual: 'Annually' };
 const RESULT = { pass: ['ok', 'Pass'], fail: ['critical', 'Fail'], exception: ['medium', 'Exception'], not_tested: ['info', 'Not yet tested'] };
@@ -76,9 +77,9 @@ function kpi(label, value, foot, tone = '') {
 // Detail: the full chain, tests and actions
 // =====================================================================
 export async function controlDetailView(el, id) {
-  let c = await GET(`/api/control-register/${id}`);
+  let [c, findings] = await Promise.all([GET(`/api/control-register/${id}`), GET(`/api/findings?control_id=${id}`)]);
   const me = state.me;
-  const reload = async () => { c = await GET(`/api/control-register/${id}`); draw(); };
+  const reload = async () => { [c, findings] = await Promise.all([GET(`/api/control-register/${id}`), GET(`/api/findings?control_id=${id}`)]); draw(); };
 
   const draw = () => {
     const latest = c.tests[0];
@@ -89,7 +90,7 @@ export async function controlDetailView(el, id) {
     mount(el, html`
       <div class="page-head">
         <div>
-          <div class="row"><a class="muted small" href="#/controls">${icon('up')} Control register</a></div>
+          <a class="back-link" href="#/controls">${icon("up")} Control register</a>
           <div class="row"><span class="tag gold">${c.code}</span>${designPill(c)}${resultPill(c.result)}${c.overdue ? pill('critical', 'Test overdue') : ''}</div>
           <h1>${c.name}</h1>
         </div>
@@ -136,10 +137,17 @@ export async function controlDetailView(el, id) {
             <td class="nowrap">${fmtDate(t.tested_on)}</td><td>${resultPill(t.result)}</td><td>${effPill(t.effectiveness)}</td><td>${t.tester_name}</td>
             <td class="wrap-cell">${t.methodology}${t.notes ? html`<small class="muted">${t.notes}</small>` : ''}</td>
             <td>${t.evidence_ids.length || html`<span class="muted">—</span>`}</td>
-            <td>${t.failure_status === 'open' ? html`${pill('critical', 'Open')}${can.steward() ? html` <button class="btn xs" data-close-fail="${t.id}" ${t.tester_id === me.id ? 'disabled title="Separation of duties: you recorded this test"' : ''}>Close…</button>` : ''}`
+            <td>${t.finding ? html`<a href="#/findings/${t.finding.id}" class="nowrap">${t.finding.code}</a> ${statusPill(t.finding.status)}` : t.failure_status === 'open' ? html`${pill('critical', 'Open')}${can.steward() ? html` <button class="btn xs" data-close-fail="${t.id}" ${t.tester_id === me.id ? 'disabled title="Separation of duties: you recorded this test"' : ''}>Close…</button>` : ''}`
               : t.failure_status === 'closed' ? html`${pill('closed', 'Closed')}<small class="muted">by ${t.closed_by_name}, ${fmtDate(t.closed_at)}: ${t.close_note}</small>` : html`<span class="muted">—</span>`}</td>
           </tr>`)}</tbody></table></div>`
           : html`<div class="empty"><b>No tests yet</b>${c.design_status === 'approved' ? 'Record the first test to show this control operates.' : 'Approve the design first.'}</div>`}
+      </section>
+
+      <section class="card" aria-labelledby="cf-h">
+        <div class="card-h"><h3 id="cf-h">Findings</h3><span class="muted small">Corrective actions linked to this control</span>${can.write() ? html`<button class="btn xs right" id="new-finding">${icon('plus')} New finding</button>` : ''}</div>
+        ${findings.length ? html`<div class="table-wrap"><table class="t"><thead><tr><th>Finding</th><th>Severity</th><th>Status</th><th>Owner</th><th>Due</th></tr></thead><tbody>
+          ${findings.map((f) => html`<tr class="clickable ${f.overdue ? 'row-overdue' : ''}" data-fid="${f.id}" tabindex="0"><td class="title-cell"><b>${f.title}</b><small>${f.code}</small></td><td>${sevPill(f.severity)}</td><td>${statusPill(f.status)}</td><td>${f.owner_name || html`<span class="bad-text">No owner</span>`}</td><td class="${f.overdue ? 's-critical' : ''}">${f.due_date ? fmtDate(f.due_date) : '—'}</td></tr>`)}
+        </tbody></table></div>` : html`<div class="empty small"><b>No findings</b>Failed tests open one automatically.</div>`}
       </section>
 
       ${can.write() ? html`<div class="row">${c.status === 'active' ? html`<button class="btn ghost danger-text" id="retire">Retire control</button>` : html`<button class="btn" id="reactivate">Reactivate control</button>`}</div>` : ''}`);
@@ -147,6 +155,9 @@ export async function controlDetailView(el, id) {
   draw();
 
   on(el, 'click', '#edit', () => controlForm(c, reload));
+  on(el, 'click', '[data-fid]', (e, tr) => { location.hash = `#/findings/${tr.dataset.fid}`; });
+  on(el, 'keydown', '[data-fid]', (e, tr) => { if (e.key === 'Enter') location.hash = `#/findings/${tr.dataset.fid}`; });
+  on(el, 'click', '#new-finding', () => findingForm(null, async (fid) => { location.hash = `#/findings/${fid}`; }, { control_id: c.id, owner_id: c.owner_id, title: `${c.code} ${c.name}: ` }));
   on(el, 'click', '#approve', async (e, b) => {
     if (!(await confirmDialog({ title: `Approve the design of ${c.code}?`, message: 'You confirm the control, as described, would meet the linked policy statements and framework requirements if it operates. Testing can start once approved.', confirm: 'Approve design' }))) return;
     b.disabled = true;
@@ -312,7 +323,7 @@ async function testDialog(c, done) {
         try {
           const r = await POST(`/api/control-register/${c.id}/tests`, body);
           close();
-          toast(r.failure_opened ? 'Test recorded as failed. A failure is open until someone else confirms remediation.' : `Test recorded. Next test due ${fmtDate(r.next_due)}.`);
+          toast(r.failure_opened ? `Test recorded as failed. ${r.finding ? `Finding ${r.finding.code} opened for remediation.` : 'A failure is open.'}` : `Test recorded. Next test due ${fmtDate(r.next_due)}.`);
           await done();
         } catch (err) { fail(err); b.disabled = false; }
       });
