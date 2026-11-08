@@ -6,7 +6,7 @@
 // workspace with sample data using a *software* passkey (test-only, never used in the app),
 // then drives headless Chrome through the DevTools protocol and captures each step.
 // Requires Google Chrome (or set CHROME=/path/to/chrome). No npm dependencies.
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -431,6 +431,34 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   console.log('    after approval:', closed);
   await evaluate(`document.querySelector('#fh-h').scrollIntoView({ block: 'center' })`); await sleep(300);
   await shot('f5-finding-history', 'section[aria-labelledby=fh-h]', 14, 'start');
+
+  console.log('Statement of Applicability');
+  await go('#/soa', '.soa-table', 900);
+  await shot('s1-soa');
+  const ctl74 = ctlMeta.controls.find((c) => c.framework_code === 'ISO27001' && c.ref === '7.4').id;
+  await click(`[data-open="${ctl74}"]`); await waitFor(`[data-just="${ctl74}"]`); await sleep(300);
+  await evaluate(`(() => { document.querySelector('[data-app="${ctl74}"][value="0"]').click(); })()`); await sleep(300);
+  await evaluate(`(() => { const t = document.querySelector('[data-just="${ctl74}"]'); t.value = 'Fully remote organization: no offices or data centres of our own; the co-working provider monitors its building under contract.'; t.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('#note').value = 'Annual scoping review'; })()`);
+  await sleep(300);
+  await evaluate(`document.querySelector('#soa-${ctl74}').scrollIntoView({ block: 'center' })`); await sleep(300);
+  await shot('s2-soa-edit', `#soa-${ctl74}`, 14);
+  await click('#save'); await sleep(1200);
+  const soaV = await evaluate(`document.querySelector('.page-head .tag.gold')?.textContent`);
+  console.log('    after save:', soaV);
+  await click('#history'); await waitFor('.soa-history'); await sleep(400);
+  await shot('s3-soa-history', '.modal', 20);
+  await closeModals(); await sleep(300);
+  // The exported PDF, rendered to an image for the docs (macOS sips).
+  const pdfRes = await fetch(BASE + '/api/soa/export?format=pdf', { headers: { Cookie: cookie } });
+  const pdfBuf = Buffer.from(await pdfRes.arrayBuffer());
+  console.log('    PDF export:', pdfRes.headers.get('content-disposition'), pdfBuf.length, 'bytes');
+  try {
+    const tmpPdf = path.join(os.tmpdir(), `soa-${process.pid}.pdf`), tmpPng = tmpPdf.replace(/pdf$/, 'png');
+    fs.writeFileSync(tmpPdf, pdfBuf);
+    execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '82', '-Z', '1400', tmpPdf, '--out', path.join(OUT, 's4-soa-pdf.jpg')], { stdio: 'ignore' });
+    fs.rmSync(tmpPdf, { force: true }); fs.rmSync(tmpPng, { force: true });
+    console.log('  ✓ s4-soa-pdf');
+  } catch { console.log('  · s4-soa-pdf skipped (needs macOS sips)'); }
 
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);

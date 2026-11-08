@@ -144,6 +144,10 @@ Schema changes are versioned migrations (`src/migrations.js`): additive, backed 
 
 Failed control tests and expired exceptions open findings automatically; audit and self-assessment findings are logged by hand. Each finding has a severity, an owner, a plan and a due date, and moves Open → In Progress → Remediated → Closed (or Risk-Accepted). Closure needs attached evidence and an approver who is neither the owner nor the person who requested closure.
 
+## Statement of Applicability
+
+An ISO/IEC 27001:2022 Annex A SoA generated from existing mappings, controls, tests and evidence. Applicability and justification are edited in place; each save is a new version in an append-only log, and the SoA exports to PDF and CSV stamped with its version and date. The PDF is produced by a small built-in writer (`src/pdf.js`), with no dependencies.
+
 ## Roles
 
 | Role | Can |
