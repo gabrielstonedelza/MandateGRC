@@ -161,6 +161,14 @@ For production: put MandateGRC behind TLS (`TLS_CERT`/`TLS_KEY` or a reverse pro
 
 ---
 
+## Tests
+
+```bash
+npm test
+```
+
+Unit tests cover the policy review (scoring, categories, measurability, owner resolution) and the control crosswalk; API tests start a throwaway server with its own data directory and sign in with a software passkey. `npm run docs:screenshots` drives the whole app in headless Chrome as an end-to-end check.
+
 ## Project layout
 
 ```

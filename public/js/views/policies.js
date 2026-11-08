@@ -2,12 +2,13 @@ import {
   html, raw, esc, mount, $, $$, on, state, can, GET, POST, PUT, DEL, toast, fail, modal, confirmDialog, formData,
   fmtDate, fmtDateTime, ago, pill, ring, icon, download, todayStr, statusLabel,
 } from '../core.js';
-import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, POLICY_TYPE_OPTIONS, analyzeStatement, applyFix, suggestThemes, THEME_LABELS } from '../lint.js';
+import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, POLICY_TYPE_OPTIONS, analyzeStatement, applyFix, suggestThemes, THEME_LABELS, ownerRoleIndex } from '../lint.js';
 import { ctrlLabel, fwName } from './shared.js';
 import { importPolicyDialog } from './import.js';
 import { explainReview } from '../fixes.js';
-import { suggestMappings, defaultFrameworks } from '../automap.js';
+import { suggestMappings, defaultFrameworks, crosswalkFor } from '../automap.js';
 
+export const MAP_DISCLAIMER = 'Control mappings are guidance, not a substitute for your auditor\'s judgment.';
 const STATUS_TABS = [['all', 'All'], ['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Published'], ['retired', 'Retired']];
 const uid = () => Math.random().toString(36).slice(2, 10);
 const controlsIndex = () => new Map(state.meta.controls.map((c) => [c.id, c]));
@@ -217,6 +218,26 @@ export async function policyEditorView(el, id) {
     }
     return sugCache.get(key);
   };
+  // Crosswalk: equivalents in the other frameworks for what is mapped (or strongly suggested).
+  const xwCache = new Map();
+  const crosswalkOf = (s, sug) => {
+    if (!editable() || !s.text?.trim()) return [];
+    const base = (s.controls || []).length ? s.controls : sug.filter((x) => x.confidence === 'high').map((x) => x.control.id);
+    if (!base.length) return [];
+    const key = `${s.text}|${base.join(',')}|${(s.dismissed || []).join(',')}|${sug.map((x) => x.control.id).join(',')}`;
+    if (!xwCache.has(key)) {
+      if (xwCache.size > 500) xwCache.clear();
+      xwCache.set(key, crosswalkFor(base, state.meta.controls, { text: s.text, exclude: [...(s.dismissed || []), ...sug.map((x) => x.control.id)] })
+        .filter((x) => !sug.some((y) => y.control.framework_code === x.control.framework_code)));
+    }
+    return xwCache.get(key);
+  };
+  const fwLabel = (code) => { const f = state.meta.frameworks.find((x) => x.code === code); return f ? `${f.name}${f.version ? ` (${f.version})` : ''}` : code; };
+  const xwBlock = (s, xw) => html`<div class="xw" role="group" aria-label="Equivalent controls in other frameworks">
+    <span class="xw-l">${icon('link')} Equivalent in other frameworks</span>
+    ${xw.map((x) => html`<button type="button" class="xw-c" data-xw="${s.id}:${x.control.id}" title="${x.control.title}. Source: ${fwLabel(x.control.framework_code)}, ${x.control.ref}. Crosswalked from ${x.via} (${x.reason}).">${icon('plus')}<b>${x.control.framework_code}</b> ${x.control.ref}</button>`)}
+    ${xw.length > 1 ? html`<button type="button" class="btn xs ghost" data-xw-all="${s.id}">Add all ${xw.length}</button>` : ''}
+  </div>`;
   const amBlock = (s, sug) => html`<div class="am">
     <div class="am-h">${icon('wand')}<b>Suggested controls</b><span class="muted">Matched from the wording. Confirm the ones that fit.</span>
       ${sug.length > 1 ? html`<button class="btn xs primary right" data-am-all="${s.id}">${icon('check')} Keep all ${sug.length}</button>` : ''}</div>
@@ -291,6 +312,7 @@ export async function policyEditorView(el, id) {
     const cmap = controlsIndex();
     const nextReview = p.effective_date ? addMonthsLocal(p.effective_date, p.review_cycle_months) : '';
     const refGroups = groupRefs(p, cmap);
+    const ownerIdx = ownerRoleIndex(p.roles.filter((r) => r), p.owner);
     mount($('#sections', el), html`
       ${sectionCard('header', html`<div class="card-b form-grid">
         <label class="f full"><span>Policy name</span><input data-f="title" value="${p.title}" maxlength="200" ${ro()}></label>
@@ -324,11 +346,13 @@ export async function policyEditorView(el, id) {
             <button class="icon-btn" data-move="${s.id}:1" title="Move down" ${i === p.statements.length - 1 ? 'disabled' : ''}>${icon('down')}</button>
             <button class="icon-btn" data-del-stmt="${s.id}" title="Delete statement">${icon('trash')}</button>` : ''}</div>
         </li>`)}</ol>
-        ${editable() ? html`<div class="card-b"><button class="btn sm" id="add-stmt">${icon('plus')} Add statement</button></div>` : ''}`,
+        <div class="card-b stmts-foot">${editable() ? html`<button class="btn sm" id="add-stmt">${icon('plus')} Add statement</button>` : ''}<span class="map-disclaimer">${MAP_DISCLAIMER}</span></div>`,
         html`${editable() ? html`<button class="btn xs" id="am-open" title="Suggest framework controls for every unmapped statement">${icon('wand')} Auto-map</button> ` : ''}<span class="muted small">${p.statements.length} statements</span>`)}
 
       ${sectionCard('roles', html`<div>${p.roles.map((r, i) => html`<div class="role-row">
-          <input data-role="${i}" data-k="role" value="${r.role}" maxlength="120" placeholder="Role" ${ro()}>
+          <div class="role-name"><input data-role="${i}" data-k="role" value="${r.role}" maxlength="120" placeholder="Role" aria-label="Role ${i + 1} name" ${ro()}>
+            ${ownerIdx === i ? html`<button type="button" class="role-own on" data-own="${i}" aria-pressed="true" ${dis()} title="${r.owner ? 'Tagged as the policy owner. Click to remove the tag.' : 'Recognised as the policy owner from its title. Click to tag it explicitly.'}">${icon('check')} Owner${r.owner ? '' : ' (detected)'}</button>`
+              : editable() ? html`<button type="button" class="role-own" data-own="${i}" aria-pressed="false" title="Tag this role as the policy owner">Mark as owner</button>` : ''}</div>
           <textarea data-role="${i}" data-k="responsibility" rows="2" maxlength="1000" placeholder="Responsibilities, written as must/shall" ${ro()}>${r.responsibility}</textarea>
           ${editable() ? html`<button class="icon-btn" data-del-role="${i}" title="Remove role">${icon('trash')}</button>` : html`<span></span>`}
         </div>`)}</div>
@@ -341,6 +365,7 @@ export async function policyEditorView(el, id) {
         ${refGroups.length ? refGroups.map((g) => html`<div><div class="section-label">${fwName(g.code)}</div><div class="chips">${g.items.map((it) => html`<span class="chip" title="${it.c.title}${it.via.length ? ' · mapped by ' + it.via.join(', ') : ' · policy-level reference'}"><b>${it.c.ref}</b> ${it.c.title}${!it.via.length && editable() ? html`<button data-unref="${it.c.id}" aria-label="Remove">×</button>` : ''}</span>`)}</div></div>`)
           : html`<div class="notice warn">No framework references yet. Map statements to controls (section 4) or add policy-level references. Mapping is what makes a policy GRC-grade.</div>`}
         ${editable() ? html`<div><button class="btn sm" id="add-ref">${icon('link')} Add policy-level reference</button></div>` : ''}
+        ${refGroups.length ? html`<div class="map-disclaimer">${MAP_DISCLAIMER}</div>` : ''}
         <label class="f"><span>Related documents <em>(standards, procedures, guidelines)</em></span><textarea data-f="related_docs" rows="2" maxlength="2000" placeholder="e.g. STD-012 Password Standard; PRC-004 User Access Review Procedure" ${ro()}>${p.related_docs || ''}</textarea></label>
       </div>`)}
 
@@ -382,7 +407,7 @@ export async function policyEditorView(el, id) {
     p.statements.forEach((s) => {
       const box = el.querySelector(`[data-findings="${s.id}"]`);
       if (!box) return;
-      const f = s.text ? analyzeStatement(s.text) : [];
+      const f = s.text ? analyzeStatement(s.text, { qualitative: !!s.qualitative?.reason }) : [];
       const sug = suggestionsFor(s);
       if (s.text && !(s.controls || []).length && !sug.length) f.push({ severity: 'warning', message: 'Not mapped to any framework control.', tip: 'No confident match for this wording. Use “Map controls” to choose one.' });
       // Only findings that just appeared animate, so typing doesn't replay them on every keystroke.
@@ -391,8 +416,10 @@ export async function policyEditorView(el, id) {
         const canFix = x.fixes?.length && editable();
         const fresh = canFix && !seenFindings.has(keys[k]);
         return html`<div class="finding ${x.severity} ${canFix ? 'has-fix' : ''} ${fresh ? 'fresh' : ''}"><div><b>${x.message}</b> <span class="tip">${x.tip || ''}</span>
-        ${canFix ? html`${fixPreview(x.fixes[0])}<div class="fix-row"><span class="muted">Suggested:</span>${x.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-fix="${s.id}:${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}</div></div>`;
-      })}${sug.length ? amBlock(s, sug) : ''}`);
+        ${canFix ? html`${fixPreview(x.fixes[0])}<div class="fix-row"><span class="muted">Suggested:</span>${x.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-fix="${s.id}:${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}
+        ${x.kind === 'measurable' && editable() ? html`<div class="fix-row"><button class="btn xs" data-qual="${s.id}" title="Record why no number applies; the note is then dismissed">Qualitative: accept…</button></div>` : ''}</div></div>`;
+      })}${s.qualitative?.reason ? html`<div class="finding qual"><div><b>Qualitative: accepted.</b> <span class="tip">${s.qualitative.reason}${s.qualitative.by ? ` · ${s.qualitative.by}, ${fmtDate(s.qualitative.at)}` : ' · recorded when you save'}</span>
+        ${editable() ? html`<button class="btn xs ghost" data-unqual="${s.id}">Undo</button>` : ''}</div></div>` : ''}${sug.length ? amBlock(s, sug) : ''}${(() => { const xw = crosswalkOf(s, sug); return xw.length ? xwBlock(s, xw) : ''; })()}`);
       keys.forEach((key) => seenFindings.add(key));
       box._findings = f;
     });
@@ -558,6 +585,17 @@ export async function policyEditorView(el, id) {
     toast(`Mapped ${ids.length} controls to 4.${p.statements.indexOf(s) + 1}.`);
   });
   on(el, 'click', '#am-open', () => autoMapDialog());
+  on(el, 'click', '[data-xw]', (e, b) => {
+    const [sid, cid] = b.dataset.xw.split(':');
+    amApply(sid, [Number(cid)]); keepOpen.delete(sid); restructure();
+    const c = ctl(Number(cid)); toast(`Mapped ${c.framework_code} ${c.ref} (crosswalk).`);
+  });
+  on(el, 'click', '[data-xw-all]', (e, b) => {
+    const s = p.statements.find((x) => x.id === b.dataset.xwAll);
+    const ids = crosswalkOf(s, suggestionsFor(s)).map((x) => x.control.id);
+    amApply(s.id, ids); keepOpen.delete(s.id); restructure();
+    toast(`Mapped ${ids.length} equivalent controls to 4.${p.statements.indexOf(s) + 1}.`);
+  });
   function autoMapDialog() {
     modal({
       title: 'Auto-map statements to controls', wide: true,
@@ -578,6 +616,7 @@ export async function policyEditorView(el, id) {
           mount(body, html`
             <div class="am-fw"><span class="muted small">Suggest controls from</span>${state.meta.frameworks.map((f) => html`<label class="am-fwc"><input type="checkbox" data-fwc="${f.code}" ${fws.includes(f.code) ? 'checked' : ''}><span>${f.name}</span></label>`)}</div>
             <div class="notice info small">${icon('check')}<span>Strong matches are ticked for you. Untick anything that does not fit, tick possible matches you agree with, then map. Nothing changes until you press <b>Map selected</b>.</span></div>
+            <div class="map-disclaimer">${MAP_DISCLAIMER}</div>
             ${rows.length ? html`<div class="amd-list">${rows.map((r) => html`<div class="amd-st">
                 <div class="amd-q"><span class="amd-n">4.${r.i + 1}</span><span>${r.s.text}</span></div>
                 <div class="amd-opts">${r.sug.map((x) => html`<label class="amd-o ${x.confidence}"><input type="checkbox" data-amd="${r.s.id}:${x.control.id}" ${pick.get(r.s.id).has(x.control.id) ? 'checked' : ''}>
@@ -661,13 +700,62 @@ export async function policyEditorView(el, id) {
   on(el, 'click', '[data-del-role]', (e, b) => { p.roles.splice(Number(b.dataset.delRole), 1); restructure(); });
   on(el, 'click', '#std-roles', () => {
     const std = [
-      ['Policy Owner', /owner/i, 'Owns this policy, approves changes and ensures it is reviewed at least annually.'],
+      ['Policy Owner', { test: () => ownerRoleIndex(p.roles, p.owner) >= 0 }, 'Owns this policy, approves changes and ensures it is reviewed at least annually.'],
       ['Custodian', /custodian|administrator|operations|\bIT\b/i, 'Implements and operates the technical and procedural controls required by this policy.'],
       ['Users', /user|personnel|employee|staff/i, 'All in-scope personnel must read, acknowledge and comply with this policy, and must report violations.'],
       ['Management', /manage|leadership|executive/i, 'Managers must ensure their teams comply with this policy and complete required acknowledgements.'],
     ];
     std.forEach(([role, re, resp]) => { if (!p.roles.some((r) => re.test(r.role))) p.roles.push({ role, responsibility: resp }); });
+    p.roles = p.roles.filter((r) => (r.role || '').trim() || (r.responsibility || '').trim());
     restructure();
+  });
+  // "Qualitative: accepted": dismiss the measurability note with a recorded reason (audited on save).
+  const QUAL_REASONS = [
+    'Event-driven obligation: it applies whenever the event occurs, so no frequency applies.',
+    'Outcome requirement: it is tested by inspecting the result, not against a number.',
+    'The measurable detail is set in a linked standard or procedure.',
+  ];
+  on(el, 'click', '[data-qual]', (e, b) => {
+    const s = p.statements.find((x) => x.id === b.dataset.qual);
+    if (!s || !editable()) return;
+    modal({
+      title: `Accept 4.${p.statements.indexOf(s) + 1} as qualitative`,
+      body: html`<form id="qf" class="stack">
+        <p class="dim small">“${s.text}”</p>
+        <p class="small">The note asks for a deadline, frequency or threshold. If none applies, record why. The reason is kept with the statement and written to the audit trail when you save.</p>
+        <fieldset class="stack qual-opts"><legend class="section-label">Reason</legend>
+          ${QUAL_REASONS.map((r, i) => html`<label class="row"><input type="radio" name="qr" value="${r}" ${i ? '' : 'checked'}><span>${r}</span></label>`)}
+          <label class="row"><input type="radio" name="qr" value="other"><span>Other:</span></label>
+          <input id="qr-other" maxlength="300" placeholder="Explain why no number applies" aria-label="Other reason">
+        </fieldset></form>`,
+      footer: html`<button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="qf-ok">Accept as qualitative</button>`,
+      onMount: ({ el: m, close }) => {
+        $('#qr-other', m).addEventListener('input', () => { m.querySelector('input[value=other]').checked = true; });
+        $('#qf-ok', m).addEventListener('click', () => {
+          const pick = m.querySelector('input[name=qr]:checked')?.value;
+          const reason = pick === 'other' ? $('#qr-other', m).value.trim() : pick;
+          if (!reason || reason.length < 3) return toast('Give a reason (at least 3 characters).', 'err');
+          snapshot();
+          s.qualitative = { reason };
+          close(); restructure();
+          toast('Accepted as qualitative. Save to record it.');
+        });
+      },
+    });
+  });
+  on(el, 'click', '[data-unqual]', (e, b) => {
+    const s = p.statements.find((x) => x.id === b.dataset.unqual);
+    if (!s || !editable()) return;
+    snapshot(); delete s.qualitative; restructure();
+  });
+  // Tag a role row as the policy owner (one at most); clicking the tagged row removes the tag.
+  on(el, 'click', '[data-own]', (e, b) => {
+    if (!editable()) return;
+    const i = Number(b.dataset.own);
+    const tagged = p.roles[i]?.owner === true;
+    p.roles = p.roles.map((r, k) => { const { owner, ...rest } = r; return k === i && !tagged ? { ...rest, owner: true } : rest; });
+    restructure();
+    toast(tagged ? 'Owner tag removed.' : `“${p.roles[i].role || 'This role'}” is now the policy owner role.`);
   });
   on(el, 'click', '#std-enf', () => {
     p.enforcement = `Compliance with the ${p.title} shall be verified through quarterly control testing, internal audit and continuous monitoring. `
@@ -942,6 +1030,7 @@ export function controlPicker({ text = '', selected = [], title, onSave }) {
         <button type="button" class="btn xs ghost right" id="pclear">Clear selection</button></div>
       <div class="pick-list" id="pl"></div>
       <div class="muted small" id="pcount"></div>
+      <div class="map-disclaimer">${MAP_DISCLAIMER}</div>
     </div>`,
     footer: html`<button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-save>Apply mappings</button>`,
     onMount: ({ el, close }) => {
@@ -1019,6 +1108,7 @@ export function docBody(p, { compact = false } = {}) {
     <h2>7. References</h2>
     ${groups.length ? html`<table><thead><tr><th>Framework</th><th>Controls</th></tr></thead><tbody>${groups.map((g) => html`<tr><td>${fwName(g.code)}</td><td>${g.items.map((it) => `${it.c.ref} ${it.c.title}`).join('; ')}</td></tr>`)}</tbody></table>`
       : html`<p>${p.ref_summary || 'See statement references.'}</p>`}
+      <p class="map-disclaimer">${MAP_DISCLAIMER}</p>
     ${p.related_docs ? html`<p><b>Related documents:</b> ${p.related_docs}</p>` : ''}
     ${compact ? '' : html`<h2>8. Revision History</h2>
     ${p.revisions?.length ? html`<table><thead><tr><th>Version</th><th>Date</th><th>Description of change</th><th>Author</th><th>Approved by</th></tr></thead><tbody>
@@ -1092,6 +1182,7 @@ export function toMarkdown(p) {
   L.push('## 6. Compliance & Enforcement', '', p.enforcement, '', '## 7. References', '');
   groupRefs(p, cmap).forEach((g) => { L.push(`**${fwName(g.code)}**`); g.items.forEach((it) => L.push(`- ${it.c.ref} ${it.c.title}`)); L.push(''); });
   if (p.related_docs) L.push(`Related documents: ${p.related_docs}`, '');
+  L.push(`*${MAP_DISCLAIMER}*`, '');
   L.push('## 8. Revision History', '', '| Version | Date | Change | Author | Approved by |', '|---|---|---|---|---|');
   (p.revisions || []).forEach((r) => L.push(`| ${r.version} | ${r.created_at.slice(0, 10)} | ${r.change_summary.replace(/\|/g, '\\|')} | ${r.author || ''} | ${r.approver || ''} |`));
   const rv = reviewForDoc(p);
