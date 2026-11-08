@@ -704,3 +704,38 @@ textarea.fx-done { animation: fx-done 1.2s ease-out; }
 .rv-opt.nav .rv-opt-p { font: 12px var(--font); color: var(--muted); }
 .rv-more summary { cursor: pointer; font-size: 12.5px; color: var(--gold); padding: 2px 0; }
 .rv-more[open] { display: grid; gap: 10px; }
+
+/* ---------- Auto-mapping: suggested controls the analyst confirms ---------- */
+.am { border: 1px dashed rgba(226, 180, 87, .4); border-radius: 8px; background: rgba(226, 180, 87, .035); padding: 8px 10px; display: grid; gap: 6px; font-size: 12px; }
+.am-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.am-h svg { width: 14px; height: 14px; color: var(--gold); }
+.am-h b { color: var(--text); }
+.am-row { display: grid; grid-template-columns: auto auto 1fr; grid-template-areas: "ref conf act" "t t t"; gap: 4px 10px; align-items: center; padding: 7px 9px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); }
+.am-row .am-ref { grid-area: ref; }
+.am-row .am-conf { grid-area: conf; justify-self: start; }
+.am-row .am-act { grid-area: act; justify-self: end; }
+.am-row .am-t { grid-area: t; }
+.am-ref { font: 600 11.5px var(--mono); color: var(--gold); white-space: nowrap; }
+.am-ref b { color: var(--text-2); font-weight: 600; margin-right: 2px; }
+.am-t { color: var(--text); min-width: 0; }
+.am-t small { display: block; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.am-conf { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px; white-space: nowrap; color: var(--muted); border: 1px solid var(--border-2); }
+.am-row.high .am-conf, .amd-o.high .am-conf { color: var(--ok); border-color: rgba(60, 198, 133, .35); background: rgba(60, 198, 133, .08); }
+.am-act { display: flex; gap: 4px; }
+.am-fw { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.am-fwc { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-2); border-radius: 999px; font-size: 12px; cursor: pointer; background: var(--surface); }
+.am-fwc:has(input:checked) { border-color: var(--gold); color: var(--text); background: rgba(226, 180, 87, .08); }
+.am-fwc input { width: 14px; height: 14px; accent-color: var(--gold); }
+.amd-list { display: grid; gap: 10px; max-height: 52vh; overflow-y: auto; padding-right: 4px; }
+.amd-st { border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: grid; gap: 8px; background: var(--bg-2); }
+.amd-q { display: flex; gap: 10px; font-size: 13px; color: var(--text); }
+.amd-n { font: 600 12px var(--mono); color: var(--gold); flex: none; padding-top: 1px; }
+.amd-opts { display: grid; gap: 4px; }
+.amd-o { display: grid; grid-template-columns: 18px 112px 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12.5px; }
+.amd-o:has(input:checked) { border-color: rgba(226, 180, 87, .55); }
+.amd-o input { width: 15px; height: 15px; accent-color: var(--gold); }
+.pick.best .ref::after { content: "best match"; display: block; font: 600 9.5px var(--font); letter-spacing: .04em; text-transform: uppercase; color: var(--ok); margin-top: 2px; }
+@media (max-width: 720px) {
+  .amd-o { grid-template-columns: 18px 1fr auto; }
+  .amd-o .am-t { grid-column: 2 / -1; }
+}

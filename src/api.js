@@ -621,6 +621,8 @@ function validatePolicyContent(b, org) {
       id: /^[a-z0-9]{1,20}$/i.test(String(s?.id || '')) ? String(s.id) : newId(),
       text: str(s?.text, { name: `Statement 4.${i + 1}`, max: 2000 }),
       controls: validControls(s?.controls || []),
+      // Auto-map suggestions the analyst rejected, so they are not offered again.
+      dismissed: validControls(Array.isArray(s?.dismissed) ? s.dismissed.slice(0, 60) : []),
     })),
     roles: b.roles.map((r) => ({ role: str(r?.role, { name: 'Role', max: 120 }), responsibility: str(r?.responsibility, { name: 'Responsibility', max: 1000 }) })),
     enforcement: str(b.enforcement, { name: 'Compliance & Enforcement', max: 5000 }),

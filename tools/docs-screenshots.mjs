@@ -212,6 +212,25 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await click('#imp-create'); await waitFor('#lint', 8000); await sleep(1200);
   await shot('10e-import-draft');
 
+  // Auto-mapping: suggestions under each unmapped statement, confirmed one by one or in bulk.
+  const amInfo = await evaluate(`(() => { const am = [...document.querySelectorAll('.am')]; return { blocks: am.length, rows: document.querySelectorAll('.am-row').length, strong: document.querySelectorAll('.am-row.high').length }; })()`);
+  console.log('    auto-map suggestions:', JSON.stringify(amInfo));
+  await evaluate(`(() => { const s = document.querySelector('.am')?.closest('.stmt'); s?.scrollIntoView({ block: 'center' }); })()`); await sleep(400);
+  await evaluate(`document.querySelector('.am').closest('.stmt').classList.add('shot-target')`);
+  await shot('17b-automap-suggestions', '.stmt.shot-target');
+  await evaluate(`document.querySelector('.stmt.shot-target .am-row [data-am-no]')?.click()`); await sleep(500);
+  await evaluate(`document.querySelector('.am-row [data-am-ok]')?.click()`); await sleep(500);
+  await click('#am-open'); await waitFor('.amd-list, .modal .empty'); await sleep(500);
+  const dlg = await evaluate(`({ statements: document.querySelectorAll('.amd-st').length, options: document.querySelectorAll('.amd-o').length, ticked: document.querySelectorAll('.amd-o input:checked').length })`);
+  console.log('    auto-map dialog:', JSON.stringify(dlg));
+  await shot('17c-automap-review', '.modal', 20);
+  await click('#amd-apply'); await sleep(900);
+  const after = await evaluate(`({ unmapped: [...document.querySelectorAll('.stmt')].filter((li) => !li.querySelector('.chip')).length, total: document.querySelectorAll('.stmt').length })`);
+  console.log('    after mapping:', JSON.stringify(after));
+  await evaluate(`document.querySelector('#sec-statements').scrollIntoView({ block: 'start' })`); await sleep(300);
+  await shot('17d-automap-mapped', '#sec-statements .stmt', 14, 'start');
+  await evaluate(`document.getElementById('save')?.click()`); await sleep(800);
+
   await go(`#/policies/${weak.id}`, '#lint', 1000);
   await shot('11-editor');
   await shot('12-header', '#sec-header');

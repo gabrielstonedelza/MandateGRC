@@ -6,6 +6,7 @@ import { SECTIONS, reviewPolicy, REVIEW_CATEGORIES, POLICY_TYPE_OPTIONS, analyze
 import { ctrlLabel, fwName } from './shared.js';
 import { importPolicyDialog } from './import.js';
 import { explainReview } from '../fixes.js';
+import { suggestMappings, defaultFrameworks } from '../automap.js';
 
 const STATUS_TABS = [['all', 'All'], ['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Published'], ['retired', 'Retired']];
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -197,6 +198,35 @@ export async function policyEditorView(el, id) {
   const dirty = () => editable() && JSON.stringify(content()) !== saved;
   snapshotSaved();
 
+  // ---------- Auto-mapping: controls are suggested from the wording, the analyst confirms them ----------
+  const fwKey = `mgrc.automap.${p.id}`;
+  const fwCodes = () => state.meta.frameworks.map((f) => f.code);
+  let mapFw = (() => {
+    try { const v = JSON.parse(localStorage.getItem(fwKey) || 'null'); if (Array.isArray(v)) { const ok = v.filter((c) => fwCodes().includes(c)); if (ok.length) return ok; } } catch { /* storage unavailable */ }
+    return defaultFrameworks(p, state.meta.controls, state.meta.frameworks);
+  })();
+  const setMapFw = (v) => { mapFw = v; try { localStorage.setItem(fwKey, JSON.stringify(v)); } catch { /* storage unavailable */ } };
+  const sugCache = new Map();
+  const keepOpen = new Set(); // statements whose remaining suggestions stay visible after one is accepted
+  const suggestionsFor = (s) => {
+    if (!editable() || !s.text?.trim() || ((s.controls || []).length && !keepOpen.has(s.id))) return [];
+    const key = `${s.text}|${(s.controls || []).join(',')}|${(s.dismissed || []).join(',')}|${mapFw.join(',')}`;
+    if (!sugCache.has(key)) {
+      if (sugCache.size > 500) sugCache.clear();
+      sugCache.set(key, suggestMappings(s.text, state.meta.controls, { frameworks: mapFw, exclude: [...(s.controls || []), ...(s.dismissed || [])] }));
+    }
+    return sugCache.get(key);
+  };
+  const amBlock = (s, sug) => html`<div class="am">
+    <div class="am-h">${icon('wand')}<b>Suggested controls</b><span class="muted">Matched from the wording. Confirm the ones that fit.</span>
+      ${sug.length > 1 ? html`<button class="btn xs primary right" data-am-all="${s.id}">${icon('check')} Keep all ${sug.length}</button>` : ''}</div>
+    ${sug.map((x) => html`<div class="am-row ${x.confidence}">
+      <span class="am-ref"><b>${x.control.framework_code}</b> ${x.control.ref}</span>
+      <span class="am-t">${x.control.title}<small>Why: ${x.reason}</small></span>
+      <span class="am-conf">${x.confidence === 'high' ? 'Strong match' : 'Possible match'}</span>
+      <span class="am-act"><button class="btn xs ok" data-am-ok="${s.id}:${x.control.id}" title="Map this control to the statement">${icon('check')} Correct</button><button class="btn xs ghost" data-am-no="${s.id}:${x.control.id}" title="Reject this suggestion; it will not be offered again">Wrong</button></span>
+    </div>`)}</div>`;
+
   const ro = () => (editable() ? '' : raw('readonly'));
   const dis = () => (editable() ? '' : raw('disabled'));
 
@@ -295,7 +325,7 @@ export async function policyEditorView(el, id) {
             <button class="icon-btn" data-del-stmt="${s.id}" title="Delete statement">${icon('trash')}</button>` : ''}</div>
         </li>`)}</ol>
         ${editable() ? html`<div class="card-b"><button class="btn sm" id="add-stmt">${icon('plus')} Add statement</button></div>` : ''}`,
-        html`<span class="muted small">${p.statements.length} statements</span>`)}
+        html`${editable() ? html`<button class="btn xs" id="am-open" title="Suggest framework controls for every unmapped statement">${icon('wand')} Auto-map</button> ` : ''}<span class="muted small">${p.statements.length} statements</span>`)}
 
       ${sectionCard('roles', html`<div>${p.roles.map((r, i) => html`<div class="role-row">
           <input data-role="${i}" data-k="role" value="${r.role}" maxlength="120" placeholder="Role" ${ro()}>
@@ -353,7 +383,8 @@ export async function policyEditorView(el, id) {
       const box = el.querySelector(`[data-findings="${s.id}"]`);
       if (!box) return;
       const f = s.text ? analyzeStatement(s.text) : [];
-      if (s.text && !(s.controls || []).length) f.push({ severity: 'warning', message: 'Not mapped to any framework control.', tip: 'Use “Map controls” to link it to ISO 27001, NIST, SOC 2 …' });
+      const sug = suggestionsFor(s);
+      if (s.text && !(s.controls || []).length && !sug.length) f.push({ severity: 'warning', message: 'Not mapped to any framework control.', tip: 'No confident match for this wording. Use “Map controls” to choose one.' });
       // Only findings that just appeared animate, so typing doesn't replay them on every keystroke.
       const keys = f.map((x) => `${s.id}|${x.message}`);
       mount(box, html`${f.map((x, k) => {
@@ -361,7 +392,7 @@ export async function policyEditorView(el, id) {
         const fresh = canFix && !seenFindings.has(keys[k]);
         return html`<div class="finding ${x.severity} ${canFix ? 'has-fix' : ''} ${fresh ? 'fresh' : ''}"><div><b>${x.message}</b> <span class="tip">${x.tip || ''}</span>
         ${canFix ? html`${fixPreview(x.fixes[0])}<div class="fix-row"><span class="muted">Suggested:</span>${x.fixes.map((fx, j) => html`<button class="btn xs ${j ? '' : 'fix-main'}" data-fix="${s.id}:${k}:${j}" title="${fixTitle(fx)}">${fixLabel(fx)}</button>`)}</div>` : ''}</div></div>`;
-      })}`);
+      })}${sug.length ? amBlock(s, sug) : ''}`);
       keys.forEach((key) => seenFindings.add(key));
       box._findings = f;
     });
@@ -379,7 +410,7 @@ export async function policyEditorView(el, id) {
       box.dataset.init = '1';
       rv.checklist.forEach((c) => { if (c.pass === false) openCats.add(c.cat); });
     }
-    lastHelp = editable() ? explainReview(rv, p, { controls: state.meta.controls || [], org: state.org || 'the organization', today: todayStr() }) : new Map();
+    lastHelp = editable() ? explainReview(rv, p, { controls: state.meta.controls || [], frameworks: mapFw, org: state.org || 'the organization', today: todayStr() }) : new Map();
     mount(box, reviewCard(rv, { editable: editable(), openCats, help: lastHelp, canUndo: undoStack.length > 0 }));
   }
   el.addEventListener('toggle', (e) => {
@@ -508,6 +539,76 @@ export async function policyEditorView(el, id) {
     const s = p.statements.find((x) => x.id === b.dataset.map);
     controlPicker({ text: s.text, selected: s.controls, title: `Map statement 4.${p.statements.indexOf(s) + 1}`, onSave: (ids) => { s.controls = ids; restructure(); } });
   });
+  // Verify auto-mapped suggestions one at a time, all at once for a statement, or in bulk.
+  const amApply = (sid, ids, reject) => {
+    const s = p.statements.find((x) => x.id === sid);
+    if (!s || !editable()) return;
+    snapshot();
+    if (reject) s.dismissed = [...new Set([...(s.dismissed || []), ...ids])];
+    else { s.controls = [...new Set([...(s.controls || []), ...ids])]; keepOpen.add(sid); }
+    restructure();
+  };
+  const ctl = (id) => state.meta.controls.find((c) => c.id === id);
+  on(el, 'click', '[data-am-ok]', (e, b) => { const [sid, cid] = b.dataset.amOk.split(':'); amApply(sid, [Number(cid)]); const c = ctl(Number(cid)); toast(`Mapped ${c.framework_code} ${c.ref}.`); });
+  on(el, 'click', '[data-am-no]', (e, b) => { const [sid, cid] = b.dataset.amNo.split(':'); amApply(sid, [Number(cid)], true); const c = ctl(Number(cid)); toast(`Rejected ${c.framework_code} ${c.ref}. It won't be suggested again for this statement.`); });
+  on(el, 'click', '[data-am-all]', (e, b) => {
+    const s = p.statements.find((x) => x.id === b.dataset.amAll);
+    const ids = suggestionsFor(s).map((x) => x.control.id);
+    amApply(s.id, ids); keepOpen.delete(s.id); restructure();
+    toast(`Mapped ${ids.length} controls to 4.${p.statements.indexOf(s) + 1}.`);
+  });
+  on(el, 'click', '#am-open', () => autoMapDialog());
+  function autoMapDialog() {
+    modal({
+      title: 'Auto-map statements to controls', wide: true,
+      body: html`<div id="amd" class="stack"></div>`,
+      footer: html`<div id="amd-f" class="row grow-row"></div>`,
+      onMount: ({ el: m, close }) => {
+        const body = $('#amd', m), foot = $('#amd-f', m);
+        let fws = [...mapFw];
+        let pick = new Map(); // statement id -> Set of control ids to map
+        let rows = [];
+        const total = () => [...pick.values()].reduce((n, x) => n + x.size, 0);
+        const drawFoot = () => mount(foot, html`<span class="muted small">${total()} controls selected on ${[...pick.values()].filter((x) => x.size).length} statements</span><button class="btn ghost right" data-close>Cancel</button><button class="btn primary" id="amd-apply" ${total() ? '' : raw('disabled')}>${icon('check')} Map selected</button>`);
+        const draw = () => {
+          const unmapped = p.statements.map((s, i) => ({ s, i })).filter(({ s }) => s.text?.trim() && !(s.controls || []).length);
+          rows = unmapped.map((r) => ({ ...r, sug: suggestMappings(r.s.text, state.meta.controls, { frameworks: fws, exclude: r.s.dismissed || [] }) })).filter((r) => r.sug.length);
+          pick = new Map(rows.map((r) => [r.s.id, new Set(r.sug.filter((x) => x.confidence === 'high').map((x) => x.control.id))]));
+          const none = unmapped.length - rows.length;
+          mount(body, html`
+            <div class="am-fw"><span class="muted small">Suggest controls from</span>${state.meta.frameworks.map((f) => html`<label class="am-fwc"><input type="checkbox" data-fwc="${f.code}" ${fws.includes(f.code) ? 'checked' : ''}><span>${f.name}</span></label>`)}</div>
+            <div class="notice info small">${icon('check')}<span>Strong matches are ticked for you. Untick anything that does not fit, tick possible matches you agree with, then map. Nothing changes until you press <b>Map selected</b>.</span></div>
+            ${rows.length ? html`<div class="amd-list">${rows.map((r) => html`<div class="amd-st">
+                <div class="amd-q"><span class="amd-n">4.${r.i + 1}</span><span>${r.s.text}</span></div>
+                <div class="amd-opts">${r.sug.map((x) => html`<label class="amd-o ${x.confidence}"><input type="checkbox" data-amd="${r.s.id}:${x.control.id}" ${pick.get(r.s.id).has(x.control.id) ? 'checked' : ''}>
+                  <span class="am-ref"><b>${x.control.framework_code}</b> ${x.control.ref}</span><span class="am-t">${x.control.title}<small>${x.reason}</small></span>
+                  <span class="am-conf">${x.confidence === 'high' ? 'Strong' : 'Possible'}</span></label>`)}</div></div>`)}</div>`
+              : html`<div class="empty">${unmapped.length ? 'No confident matches in the selected frameworks. Try adding another framework above.' : 'Every statement is already mapped.'}</div>`}
+            ${none > 0 && rows.length ? html`<div class="muted small">${none} unmapped statement${none === 1 ? '' : 's'} had no confident match. Map ${none === 1 ? 'it' : 'them'} by hand with “Map controls”.</div>` : ''}`);
+          drawFoot();
+        };
+        on(body, 'change', '[data-fwc]', () => {
+          fws = [...body.querySelectorAll('[data-fwc]:checked')].map((x) => x.dataset.fwc);
+          draw();
+        });
+        on(body, 'change', '[data-amd]', (e, cb) => {
+          const [sid, cid] = cb.dataset.amd.split(':');
+          cb.checked ? pick.get(sid).add(Number(cid)) : pick.get(sid).delete(Number(cid));
+          drawFoot();
+        });
+        on(foot, 'click', '#amd-apply', () => {
+          snapshot();
+          let n = 0, st = 0;
+          pick.forEach((ids, sid) => { const s = p.statements.find((x) => x.id === sid); if (s && ids.size) { s.controls = [...new Set([...(s.controls || []), ...ids])]; n += ids.size; st++; } });
+          if (fws.length) setMapFw(fws);
+          close();
+          restructure();
+          toast(`Mapped ${n} controls to ${st} statements. Save to keep them, or undo from the review report.`);
+        });
+        draw();
+      },
+    });
+  }
   on(el, 'click', '#add-ref', () => {
     const text = [p.title, p.purpose, p.scope].join(' ');
     controlPicker({ text, selected: p.ref_controls, title: 'Policy-level references', onSave: (ids) => { p.ref_controls = ids; restructure(); } });
@@ -825,7 +926,11 @@ export function controlPicker({ text = '', selected = [], title, onSave }) {
   const wanted = new Set([...themesFromText, ...themesFromSel]);
   const suggested = all.filter((c) => !sel.has(c.id) && c.themes.split(',').some((t) => wanted.has(t)))
     .map((c) => ({ c, score: c.themes.split(',').filter((t) => wanted.has(t)).length + (themesFromText.some((t) => c.themes.split(',')[0] === t) ? 1 : 0) }))
-    .sort((a, b) => b.score - a.score).slice(0, 40).map((x) => x.c);
+    .sort((a, b) => b.score - a.score).map((x) => x.c);
+  const best = text ? suggestMappings(text, all, { perFramework: 3, exclude: [...sel] }).map((x) => x.control) : [];
+  const bestIds = new Set(best.map((c) => c.id));
+  suggested.splice(0, suggested.length, ...best, ...suggested.filter((c) => !bestIds.has(c.id)));
+  suggested.length = Math.min(suggested.length, 40);
 
   modal({
     title, wide: true,
@@ -859,7 +964,7 @@ export function controlPicker({ text = '', selected = [], title, onSave }) {
         else if (fw === 'suggested') rows = suggested;
         else if (fw === 'selected') rows = all.filter((c) => sel.has(c.id));
         else rows = all.filter((c) => c.framework_code === fw);
-        mount($('#pl', el), rows.length ? html`${rows.slice(0, 300).map((c) => html`<label class="pick ${fw === 'suggested' && !q ? 'sug' : ''}"><input type="checkbox" data-c="${c.id}" ${sel.has(c.id) ? 'checked' : ''}><span class="ref">${c.framework_code} ${c.ref}</span><span>${c.title}<small>${c.family}${c.themes ? ' · ' + c.themes.split(',').map((t) => THEME_LABELS[t] || t).join(', ') : ''}</small></span></label>`)}`
+        mount($('#pl', el), rows.length ? html`${rows.slice(0, 300).map((c) => html`<label class="pick ${fw === 'suggested' && !q ? 'sug' : ''} ${fw === 'suggested' && !q && bestIds.has(c.id) ? 'best' : ''}"><input type="checkbox" data-c="${c.id}" ${sel.has(c.id) ? 'checked' : ''}><span class="ref">${c.framework_code} ${c.ref}</span><span>${c.title}<small>${c.family}${c.themes ? ' · ' + c.themes.split(',').map((t) => THEME_LABELS[t] || t).join(', ') : ''}</small></span></label>`)}`
           : html`<div class="empty">No controls match.</div>`);
         visible = rows.slice(0, 300).map((c) => c.id);
         syncAll();

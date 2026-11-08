@@ -495,7 +495,7 @@ export function reviewPolicy(p, opts = {}) {
   const headerIssues = lint.issues.filter((i) => i.section === 'header' && i.severity !== 'info');
   push('structure', 'All eight sections are complete', !of('structure', 'error').length, of('structure', 'error').map((i) => i.message).join(' '), refsOf(of('structure', 'error')));
   push('structure', 'Owner, effective date and an annual review cycle are set', !headerIssues.length, headerIssues.map((i) => i.message).join(' '), refsOf(headerIssues));
-  push('structure', 'Every statement is mapped to a framework control', !unmapped.length, unmapped.length ? `Not mapped: ${unmapped.map((i) => i.num).join(', ')}. Use “Map controls” under each statement.` : '', refsOf(unmapped));
+  push('structure', 'Every statement is mapped to a framework control', !unmapped.length, unmapped.length ? `Not mapped: ${unmapped.map((i) => i.num).join(', ')}. Check the suggested controls under each statement, or use “Map controls”.` : '', refsOf(unmapped));
   push('language', 'Every statement uses "must" or "shall"', !of('language', 'error').length, of('language', 'error').map((i) => i.message).join(' '), refsOf(of('language', 'error')));
   push('language', 'No non-mandatory or unmeasurable wording', !of('language', 'warning').length, of('language', 'warning').map((i) => i.message).join(' '), refsOf(of('language', 'warning')));
   if (sub.type) reqs.forEach((r) => push('coverage', r.topic, r.met, r.met ? `Covered by ${r.num}` : 'Not covered', r.met ? [{ target: `st-${r.statementId}`, label: r.num }] : []));

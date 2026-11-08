@@ -2,7 +2,8 @@
 // Pure functions: given the review result and the policy, return what is wrong, why it
 // matters, and two or more concrete fixes with a preview of the result. The editor applies
 // the chosen fix; nothing here changes the policy itself.
-import { SECTIONS, suggestThemes, applyFix } from './lint.js';
+import { SECTIONS, applyFix } from './lint.js';
+import { suggestMappings, defaultFrameworks } from './automap.js';
 
 // ---------------------------------------------------------------- Alternative wordings
 // A second, differently scoped wording for every coverage requirement, so authors can choose.
@@ -176,34 +177,25 @@ function mandatoryRewrite(text, modal = 'must') {
   return null;
 }
 
-// Best-matching controls for a statement, preferring frameworks the policy already uses.
-const STOP = new Set(['must', 'shall', 'with', 'from', 'that', 'this', 'their', 'than', 'have', 'been', 'into', 'when', 'within', 'least', 'other', 'every', 'organizational', 'information', 'security']);
-const stems = (t) => (String(t).toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => !STOP.has(w)).map((w) => w.slice(0, 5));
-function suggestControls(text, controls, preferFw) {
-  const themes = suggestThemes(text);
-  const words = new Set(stems(text));
-  if (!themes.length) return [];
-  const scored = controls.map((c) => {
-    const ct = (c.themes || '').split(',').filter(Boolean);
-    const overlap = ct.filter((t) => themes.includes(t)).length;
-    const titleHits = stems(c.title).filter((w) => words.has(w)).length;
-    return { c, score: overlap + Math.min(titleHits, 2) * 0.8 + (ct[0] === themes[0] ? 0.5 : 0) + (preferFw.includes(c.framework_code) ? 0.3 : 0) };
-  }).filter((x) => x.score >= 1).sort((a, b) => b.score - a.score);
-  return scored.map((x) => x.c);
+// Controls for a statement come from the shared auto-mapper, so the review and the editor agree.
+// Strong matches first; if there are none, the single best possible match.
+function suggestControls(s, controls, frameworks) {
+  const list = suggestMappings(s.text, controls, { frameworks, exclude: [...(s.controls || []), ...(s.dismissed || [])] });
+  const strong = list.filter((x) => x.confidence === 'high');
+  return (strong.length ? strong : list.slice(0, 1)).map((x) => x.control);
 }
 
 // ---------------------------------------------------------------- Main
 // Returns, for each failed checklist item (by index), { why, problems: [{ what, ref, options }], bulk? }.
 // options: { label, preview, recommended?, action } where action is a plain object the editor applies.
-export function explainReview(rv, p, { controls = [], org = 'the organization', today = new Date().toISOString().slice(0, 10) } = {}) {
+export function explainReview(rv, p, { controls = [], frameworks = null, org = 'the organization', today = new Date().toISOString().slice(0, 10) } = {}) {
   const out = new Map();
   const stmt = (sid) => p.statements.find((s) => s.id === sid);
   const numOf = (sid) => `4.${p.statements.findIndex((s) => s.id === sid) + 1}`;
   const issues = rv.lint.issues;
   const typeKey = rv.type?.key;
   const subject = subjectOf(p.title, typeKey);
-  const usedFw = [...new Set(p.statements.flatMap((s) => s.controls || []).map((id) => controls.find((c) => c.id === id)?.framework_code).filter(Boolean))];
-  const preferFw = usedFw.length ? usedFw : ['ISO27001', 'NISTCSF', 'NIST80053'];
+  const preferFw = frameworks?.length ? frameworks : defaultFrameworks(p, controls, [...new Set(controls.map((c) => c.framework_code))]);
   const ctlLabel = (c) => `${c.framework_code} ${c.ref} · ${c.title}`;
 
   rv.checklist.forEach((item, idx) => {
@@ -242,8 +234,8 @@ export function explainReview(rv, p, { controls = [], org = 'the organization', 
           opts.push({ label: 'Add the four standard roles', recommended: true, preview: four.map((r) => r.role).join(' · '), action: { type: 'roles', roles: four } });
           opts.push({ label: 'Add owner and users only', preview: `${four[0].role} · Users`, action: { type: 'roles', roles: [four[0], four[2]] } });
         } else if (sec === 'references') {
-          const items = p.statements.filter((x) => x.text && !(x.controls || []).length).map((x) => ({ sid: x.id, best: suggestControls(x.text, controls, preferFw)[0] })).filter((x) => x.best);
-          if (items.length) opts.push({ label: `Map ${items.length === 1 ? 'the statement' : `all ${items.length} statements`} to their best match`, recommended: true, preview: items.slice(0, 4).map((x) => `${numOf(x.sid)} → ${x.best.framework_code} ${x.best.ref}`).join(' · ') + (items.length > 4 ? ' …' : ''), action: { type: 'mapMany', items: items.map((x) => ({ sid: x.sid, ids: [x.best.id] })) } });
+          const items = p.statements.filter((x) => x.text && !(x.controls || []).length).map((x) => ({ sid: x.id, best: suggestControls(x, controls, preferFw) })).filter((x) => x.best.length);
+          if (items.length) opts.push({ label: `Map ${items.length === 1 ? 'the statement' : `all ${items.length} statements`} to the suggested controls`, recommended: true, preview: items.slice(0, 3).map((x) => `${numOf(x.sid)} → ${x.best.map((c) => `${c.framework_code} ${c.ref}`).join(', ')}`).join(' · ') + (items.length > 3 ? ' …' : ''), action: { type: 'mapMany', items: items.map((x) => ({ sid: x.sid, ids: x.best.map((c) => c.id) })) } });
         } else if (sec === 'statements') {
           const reqs = (rv.requirements || []).filter((r) => !r.met).slice(0, 3);
           if (reqs.length) opts.push({ label: `Insert ${reqs.length} recommended statements`, recommended: true, preview: reqs.map((r) => r.suggest).join(' '), action: { type: 'insertMany', items: reqs.map((r) => ({ text: r.suggest, controls: r.controlIds || [] })) } });
@@ -279,19 +271,17 @@ export function explainReview(rv, p, { controls = [], org = 'the organization', 
       for (const i of unmapped) {
         const s = stmt(i.statementId);
         if (!s) continue;
-        const best = suggestControls(s.text, controls, preferFw);
+        const best = suggestControls(s, controls, preferFw);
         const opts = [];
-        if (best[0]) {
-          opts.push({ label: `Map to ${best[0].framework_code} ${best[0].ref}`, recommended: true, preview: ctlLabel(best[0]), action: { type: 'map', sid: s.id, ids: [best[0].id] } });
-          bulk.push({ sid: s.id, ids: [best[0].id] });
-          const perFw = preferFw.map((fw) => best.find((c) => c.framework_code === fw)).filter(Boolean);
-          if (perFw.length > 1) opts.push({ label: `Map to ${perFw.length} frameworks`, preview: perFw.map((c) => `${c.framework_code} ${c.ref}`).join(' · '), action: { type: 'map', sid: s.id, ids: perFw.map((c) => c.id) } });
-          else if (best[1]) opts.push({ label: `Map to ${best[1].framework_code} ${best[1].ref}`, preview: ctlLabel(best[1]), action: { type: 'map', sid: s.id, ids: [best[1].id] } });
+        if (best.length) {
+          opts.push({ label: best.length === 1 ? `Map to ${best[0].framework_code} ${best[0].ref}` : `Keep the ${best.length} suggested controls`, recommended: true, preview: best.map((c) => best.length === 1 ? ctlLabel(c) : `${c.framework_code} ${c.ref}`).join(' · '), action: { type: 'map', sid: s.id, ids: best.map((c) => c.id) } });
+          bulk.push({ sid: s.id, ids: best.map((c) => c.id) });
+          if (best.length > 1) opts.push({ label: `Only ${best[0].framework_code} ${best[0].ref}`, preview: ctlLabel(best[0]), action: { type: 'map', sid: s.id, ids: [best[0].id] } });
         }
         opts.push({ label: 'Choose controls myself', preview: 'Open the control picker with suggestions', action: { type: 'pick', sid: s.id } });
         help.problems.push({ what: `${numOf(s.id)} “${short(s.text)}” is not linked to any framework control.`, ref: { target: `st-${s.id}`, label: numOf(s.id) }, options: opts });
       }
-      if (bulk.length > 1) help.bulk = { label: `Map all ${bulk.length} statements to their best match`, action: { type: 'mapMany', items: bulk } };
+      if (bulk.length > 1) help.bulk = { label: `Map all ${bulk.length} statements to their suggested controls`, action: { type: 'mapMany', items: bulk } };
     } else if (item.label === 'Every statement uses "must" or "shall"') {
       help.why = WHY.noModal;
       for (const i of issues.filter((x) => x.cat === 'language' && x.severity === 'error' && x.statementId)) {
