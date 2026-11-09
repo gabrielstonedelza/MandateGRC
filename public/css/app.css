@@ -877,3 +877,26 @@ tr.row-overdue td:first-child { box-shadow: inset 3px 0 0 var(--crit); }
 .pkg-n svg { width: 16px; height: 16px; }
 td.hash { word-break: break-all; max-width: 280px; white-space: normal; }
 @media (max-width: 720px) { .pkg-list { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Risk traceability ---------- */
+.trace-verdict { margin: 0; }
+.trace-rows { display: grid; gap: 0; }
+.trace-row { grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.trace-row:last-child { border-bottom: 0; }
+.trace-row.gap { box-shadow: inset 3px 0 0 var(--warn); }
+.trace-row.ok { box-shadow: inset 3px 0 0 var(--ok); }
+@media (max-width: 1100px) { .trace-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Vendors ---------- */
+.vq-list { list-style: none; margin: 0; padding: 8px 16px; display: grid; gap: 4px; font-size: 13px; }
+.vq-list li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.vq-a { font-weight: 700; font-size: 12px; }
+.vq-yes .vq-a { color: var(--ok); } .vq-partial .vq-a { color: var(--warn); } .vq-no .vq-a { color: #ff8b92; } .vq-na .vq-a { color: var(--muted); }
+.vq-form { margin: 0; padding-left: 20px; display: grid; gap: 10px; max-height: 52vh; overflow-y: auto; }
+.vq-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.vq-form legend { width: 100%; font-size: 13px; margin-bottom: 4px; color: var(--text); }
+.vq-opt { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; cursor: pointer; }
+.vq-opt input { width: auto; accent-color: var(--gold); }
+.t td > small.muted { display: block; }
+.scope-tags { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.scope-tags legend { width: 100%; margin-bottom: 4px; }

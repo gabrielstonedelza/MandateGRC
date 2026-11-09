@@ -152,6 +152,18 @@ An ISO/IEC 27001:2022 Annex A SoA generated from existing mappings, controls, te
 
 One action produces a dated ZIP, scoped to a framework or to all of them: approved policies at their approved versions (PDF), the control register and test records, the SoA, the risk register, exceptions, findings, attestations, an evidence index, the full audit trail and a hash-chain verification report. `manifest.json` lists the SHA-256 of every file; `verify-package.mjs` (Node 18+, no dependencies) re-checks the files and recomputes the audit chain. Each export is recorded in the audit trail with the manifest and ZIP hashes. Built with dependency-free ZIP and PDF writers (`src/zip.js`, `src/pdf.js`).
 
+## Risk traceability
+
+From any risk, one screen shows the full mitigation chain: the controls that mitigate it (linked directly, or operating a framework requirement the risk names), the policy statements behind each, their latest tests, their evidence and open findings, with a verdict (operating, gap, or none).
+
+## Vendors
+
+Lightweight third-party risk: vendor records with criticality and data access, a 12-question security questionnaire that drives a risk rating and the next reassessment date, and SOC 2 report upload (PDF stored under the data directory, named and verified by SHA-256) with a review by someone other than the uploader. Overdue reassessments and missing reports surface in the action queue.
+
+## Assets
+
+A simple asset inventory (name, type, owner, classification, environment) with framework scope tags (e.g. ISO 27001 ISMS, PCI DSS CDE) and links to the policies, controls and risks that cover each asset. Controls, risks and policies show their assets in scope; audit packages include the register.
+
 ## Roles
 
 | Role | Can |

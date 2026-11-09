@@ -12,6 +12,9 @@ import { controlsView, controlDetailView } from './views/controls.js';
 import { findingsView, findingDetailView } from './views/findings.js';
 import { soaView } from './views/soa.js';
 import { packageView } from './views/package.js';
+import { riskTraceView } from './views/trace.js';
+import { vendorsView, vendorDetailView } from './views/vendors.js';
+import { assetsView } from './views/assets.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -30,11 +33,13 @@ const NAV = [
     { href: '#/risks', label: 'Risk Register', icon: 'risk', show: can.read },
     { href: '#/exceptions', label: 'Exceptions', icon: 'exception', show: can.read },
     { href: '#/findings', label: 'Findings', icon: 'flag', show: can.read, badge: 'findings' },
+    { href: '#/vendors', label: 'Vendors', icon: 'users', show: can.read },
   ] },
   { group: 'Comply', items: [
     { href: '#/controls', label: 'Control Register', icon: 'control', show: can.read },
     { href: '#/frameworks', label: 'Frameworks & Controls', icon: 'framework', show: can.read },
     { href: '#/soa', label: 'Statement of Applicability', icon: 'scale', show: can.read },
+    { href: '#/assets', label: 'Assets', icon: 'server', show: can.read },
     { href: '#/evidence', label: 'Evidence', icon: 'evidence', show: can.read },
   ] },
   { group: 'Assure', items: [
@@ -56,13 +61,17 @@ const ROUTES = [
   [/^\/templates$/, templatesView, 'Template Library', can.write],
   [/^\/attestations$/, attestationsView, 'Attestations'],
   [/^\/risks$/, risksView, 'Risk Register', can.read],
+  [/^\/risks\/(\d+)$/, riskTraceView, 'Risk Register', can.read],
   [/^\/exceptions$/, exceptionsView, 'Exceptions', can.read],
   [/^\/soa$/, soaView, 'Statement of Applicability', can.read],
+  [/^\/vendors$/, vendorsView, 'Vendors', can.read],
+  [/^\/vendors\/(\d+)$/, vendorDetailView, 'Vendors', can.read],
   [/^\/findings$/, findingsView, 'Findings', can.read],
   [/^\/findings\/(\d+)$/, findingDetailView, 'Findings', can.read],
   [/^\/controls$/, controlsView, 'Control Register', can.read],
   [/^\/controls\/(\d+)$/, controlDetailView, 'Control Register', can.read],
   [/^\/frameworks(?:\/([A-Za-z0-9_-]+))?$/, frameworksView, 'Frameworks & Controls', can.read],
+  [/^\/assets$/, assetsView, 'Assets', can.read],
   [/^\/evidence$/, evidenceView, 'Evidence', can.read],
   [/^\/audit$/, auditView, 'Audit Trail', can.audit],
   [/^\/audit-package$/, packageView, 'Audit Package', can.audit],

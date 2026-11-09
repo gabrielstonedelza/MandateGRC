@@ -7,6 +7,7 @@ import { ctrlLabel, fwName } from './shared.js';
 import { importPolicyDialog } from './import.js';
 import { explainReview } from '../fixes.js';
 import { suggestMappings, defaultFrameworks, crosswalkFor } from '../automap.js';
+import { assetsPanel } from './assets.js';
 
 export const MAP_DISCLAIMER = 'Control mappings are guidance, not a substitute for your auditor\'s judgment.';
 const STATUS_TABS = [['all', 'All'], ['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Published'], ['retired', 'Retired']];
@@ -366,6 +367,7 @@ export async function policyEditorView(el, id) {
           : html`<div class="notice warn">No framework references yet. Map statements to controls (section 4) or add policy-level references. Mapping is what makes a policy GRC-grade.</div>`}
         ${editable() ? html`<div><button class="btn sm" id="add-ref">${icon('link')} Add policy-level reference</button></div>` : ''}
         ${refGroups.length ? html`<div class="map-disclaimer">${MAP_DISCLAIMER}</div>` : ''}
+        <div><div class="section-label">Assets in scope</div><div id="pol-assets" class="muted small">Loading…</div></div>
         <label class="f"><span>Related documents <em>(standards, procedures, guidelines)</em></span><textarea data-f="related_docs" rows="2" maxlength="2000" placeholder="e.g. STD-012 Password Standard; PRC-004 User Access Review Procedure" ${ro()}>${p.related_docs || ''}</textarea></label>
       </div>`)}
 
@@ -380,6 +382,8 @@ export async function policyEditorView(el, id) {
         ${p.exceptions.map((x) => html`<div class="row"><span class="tag">${x.code}</span><a href="#/exceptions">${x.title}</a><span class="right">${pill(x.status)}</span><span class="muted small">to ${fmtDate(x.expires_at)}</span></div>`)}
       </div></section>` : ''}
     `);
+    // Assets that name this policy as covering them (scope evidence).
+    GET(`/api/assets?policy_id=${p.id}`).then((list) => { const box = $('#pol-assets', el); if (box) mount(box, assetsPanel(list, { empty: 'No asset references this policy. Link it from Assets.' })); }).catch(() => {});
   }
 
   // ---------- Lint (runs on every keystroke, no server round-trip) ----------

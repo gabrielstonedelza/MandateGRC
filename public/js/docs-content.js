@@ -456,6 +456,15 @@ export const DOCS = [
         { t: 'Filter the heat map', d: 'Click any cell of the residual heat map to list only the risks in that cell.' },
       ] },
       { table: { head: ['Score', 'Level'], rows: [['1–5', 'Low'], ['6–11', 'Medium'], ['12–19', 'High'], ['20–25', 'Critical']] } },
+      { h: 'Trace a risk to its evidence' },
+      { p: 'In the risk drawer, tick the <b>Mitigating controls</b> from the control register. Then click <b>Traceability</b> (or the button in the register\'s Mitigation column). One screen shows, for each control: the policy statements behind it, its latest test and the evidence, with any findings.' },
+      { figure: img('t1-risk-trace'), caption: 'The traceability view: verdict, then one row per mitigating control, from control to policy statement to latest test to evidence.' },
+      { table: { head: ['Verdict', 'Meaning'], rows: [
+        ['Mitigation operating', 'Every mitigating control has an approved design, passed its latest test and is not overdue.'],
+        ['Mitigation gap', 'At least one control is untested, failing, overdue or awaiting design approval. Framework requirements the risk names but no control operates are listed too.'],
+        ['No mitigating controls', 'Nothing in the register mitigates the risk yet.'],
+      ] } },
+      { p: 'Controls appear either because you linked them to the risk, or because they operate one of the framework requirements you linked to it (shown as “Operates ISO27001 8.5”).' },
       { tip: 'Set your risk appetite in <a href="#/docs/settings">Settings</a>. Any open risk whose residual score is above it appears in everyone\'s action queue.' },
     ],
   },
@@ -605,6 +614,36 @@ export const DOCS = [
       ] },
       { p: 'Generating a package is itself recorded in the audit trail, with the SHA-256 of its manifest and of the ZIP. The list of packages on the same page shows each one, so a package handed to an auditor can be matched to its record.' },
       { figure: img('p2-package-history'), caption: 'Every package generated, from the audit trail, with the audit-chain status at the time and the manifest fingerprint.' },
+    ],
+  },
+  {
+    id: 'vendors', group: 'Risk & compliance', title: 'Vendors (third-party risk)', minutes: 4,
+    summary: 'Track the third parties that handle your data: criticality, a short security questionnaire, SOC 2 reports and reassessment dates.',
+    blocks: [
+      { p: 'Open <b>Vendors</b> (under Risk). Add each third party that processes your data or runs a service you depend on. No heavy workflow: enough to know who they are, how risky they are, whether you hold a current assurance report, and when to look again.' },
+      { figure: img('v1-vendors'), caption: 'The vendor register: criticality, data access, risk rating, the latest SOC 2 report and the reassessment date.' },
+      { steps: [
+        { t: 'Add the vendor', d: 'Click <b>New vendor</b>. Set the service, the <b>criticality</b> (impact on you if they fail), what <b>data</b> they can access, and the owner.' },
+        { t: 'Assess it', d: 'On the vendor, click <b>Assess</b> and answer the 12 questions (MFA, encryption, breach notification within 72 hours, penetration testing, subprocessors, exit and more) from their questionnaire response, SOC 2 report or contract.', img: img('v2-vendor-assess') },
+        { t: 'Read the rating', d: 'The <b>risk rating</b> combines exposure (criticality and data access) with the gaps in the answers. The next reassessment is scheduled automatically: 6 months for critical vendors, 12 for high and medium, 24 for low.' },
+        { t: 'Upload the SOC 2 report', d: 'Click <b>Upload report</b> and choose the PDF (up to 15 MB). Record the type, period end, opinion and any exceptions. The file is kept on your MandateGRC server, named by its SHA-256, and the hash is written to the audit trail. Someone other than the uploader clicks <b>Record review…</b> to note the outcome and any controls you must operate yourself (CUECs).', img: img('v3-vendor') },
+      ] },
+      { p: 'Overdue reassessments, critical or high vendors without a SOC 2 report covering the last 12 months, and reports awaiting review appear in the dashboard action queue. Offboard a vendor when the contract ends: it leaves the queue and keeps its history. The vendor register is included in every audit package.' },
+    ],
+  },
+  {
+    id: 'assets', group: 'Risk & compliance', title: 'Assets and audit scope', minutes: 3,
+    summary: 'A simple inventory of what you protect, used to define and evidence ISO 27001 and PCI DSS scope.',
+    blocks: [
+      { p: 'Open <b>Assets</b> (under Comply) and add the systems, applications, data stores and services that matter. For each, record the <b>owner</b>, <b>classification</b> (Public, Internal, Confidential, Restricted) and <b>environment</b>, and tick the frameworks whose scope it falls in: for example the ISO/IEC 27001 ISMS scope or the PCI DSS cardholder data environment.' },
+      { figure: img('a1-assets'), caption: 'The asset register: owner, classification, environment, scope and how many policies, controls and risks cover each asset. Filter by type, classification, environment or scope.' },
+      { steps: [
+        { t: 'Add an asset', d: 'Click <b>New asset</b>, name it and set its type, owner, classification and environment.' },
+        { t: 'Tag its scope', d: 'Under <b>In scope of</b>, tick each framework whose audit scope includes it.' },
+        { t: 'Link what covers it', d: 'Tick the policies that apply to it, the controls that protect it and the risks to it. Those pages then list it under <b>Assets in scope</b>.', img: img('a2-asset-form') },
+      ] },
+      { figure: img('a3-control-assets'), caption: 'Every control, risk traceability view and policy shows the assets that reference it.' },
+      { p: 'The summary flags assets without an owner and assets no control protects, which are the usual scoping gaps. Audit packages include the asset register; a framework-scoped package lists the assets tagged with that framework or linked to its controls and policies. Retire an asset when it is decommissioned: it keeps its history.' },
     ],
   },
   {
