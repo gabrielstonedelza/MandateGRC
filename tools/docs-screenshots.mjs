@@ -460,6 +460,28 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
     console.log('  ✓ s4-soa-pdf');
   } catch { console.log('  · s4-soa-pdf skipped (needs macOS sips)'); }
 
+  console.log('Audit package');
+  await go('#/audit-package', '#gen', 900);
+  await evaluate(`(() => { const s = document.querySelector('#scope'); s.value = 'ISO27001'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await sleep(900);
+  await shot('p1-audit-package');
+  const pkgRes = await fetch(BASE + '/api/audit-package', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE, Cookie: cookie, 'X-CSRF-Token': csrf }, body: JSON.stringify({ scope: 'ISO27001' }) });
+  const pkgBuf = Buffer.from(await pkgRes.arrayBuffer());
+  const { unzip } = await import('../src/zip.js');
+  const pkgFiles = unzip(pkgBuf);
+  console.log('    package:', pkgRes.headers.get('content-disposition'), pkgFiles.length, 'files');
+  await go('#/', '.posture', 300);
+  await go('#/audit-package', '#gen', 900);
+  await evaluate(`document.querySelector('#ph-h').scrollIntoView({ block: 'center' })`); await sleep(300);
+  await shot('p2-package-history', 'section[aria-labelledby=ph-h]', 14, 'start');
+  try {
+    const tmp = path.join(os.tmpdir(), `idx-${process.pid}.pdf`);
+    fs.writeFileSync(tmp, pkgFiles.find((f) => f.name === '00-index.pdf').data);
+    execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '82', '-Z', '1400', tmp, '--out', path.join(OUT, 'p3-package-index.jpg')], { stdio: 'ignore' });
+    fs.rmSync(tmp, { force: true });
+    console.log('  ✓ p3-package-index');
+  } catch { console.log('  · p3-package-index skipped (needs macOS sips)'); }
+
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);
   await click('#verify'); await waitFor('.notice.good'); await sleep(500);

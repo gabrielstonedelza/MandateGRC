@@ -11,6 +11,7 @@ import { auditView } from './views/audit.js';
 import { controlsView, controlDetailView } from './views/controls.js';
 import { findingsView, findingDetailView } from './views/findings.js';
 import { soaView } from './views/soa.js';
+import { packageView } from './views/package.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -36,7 +37,10 @@ const NAV = [
     { href: '#/soa', label: 'Statement of Applicability', icon: 'scale', show: can.read },
     { href: '#/evidence', label: 'Evidence', icon: 'evidence', show: can.read },
   ] },
-  { group: 'Assure', items: [{ href: '#/audit', label: 'Audit Trail', icon: 'audit', show: can.audit }] },
+  { group: 'Assure', items: [
+    { href: '#/audit', label: 'Audit Trail', icon: 'audit', show: can.audit },
+    { href: '#/audit-package', label: 'Audit Package', icon: 'download', show: can.audit },
+  ] },
   { group: 'Help', items: [{ href: '#/docs', label: 'Documentation', icon: 'book', show: () => true }] },
   { group: 'Administer', items: [
     { href: '#/users', label: 'Users & Roles', icon: 'users', show: can.admin },
@@ -61,6 +65,7 @@ const ROUTES = [
   [/^\/frameworks(?:\/([A-Za-z0-9_-]+))?$/, frameworksView, 'Frameworks & Controls', can.read],
   [/^\/evidence$/, evidenceView, 'Evidence', can.read],
   [/^\/audit$/, auditView, 'Audit Trail', can.audit],
+  [/^\/audit-package$/, packageView, 'Audit Package', can.audit],
   [/^\/users$/, usersView, 'Users & Roles', can.admin],
   [/^\/settings$/, settingsView, 'Settings', can.admin],
   [/^\/account$/, accountView, 'My Account'],
@@ -227,7 +232,9 @@ async function route() {
   }
   document.querySelectorAll('[data-nav]').forEach((a) => {
     const href = a.dataset.nav;
-    a.classList.toggle('active', href === '#/' ? path === '/' : path.startsWith(href.slice(1)));
+    // Match whole path segments, so #/audit is not active on #/audit-package.
+    const base = href.slice(1);
+    a.classList.toggle('active', href === '#/' ? path === '/' : path === base || path.startsWith(base + '/'));
   });
   mount($('#crumbs'), html`<span>${state.org}</span> / <b>${match.title}</b>`);
   document.title = `${match.title} · MandateGRC`;

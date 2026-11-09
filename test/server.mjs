@@ -63,5 +63,5 @@ export async function client(base, { username = `u${crypto.randomBytes(4).toStri
   }
   csrf = res.csrf;
   const raw = (p) => fetch(base + p, { headers: { Cookie: cookie } });
-  return { user: res.user, raw, get: (p) => call('GET', p), post: (p, b = {}) => call('POST', p, b), put: (p, b = {}) => call('PUT', p, b), del: (p) => call('DELETE', p, {}) };
+  return { user: res.user, raw, cookieHeader: () => cookie, csrf: () => csrf, get: (p) => call('GET', p), post: (p, b = {}) => call('POST', p, b), put: (p, b = {}) => call('PUT', p, b), del: (p) => call('DELETE', p, {}) };
 }

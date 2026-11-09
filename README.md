@@ -148,6 +148,10 @@ Failed control tests and expired exceptions open findings automatically; audit a
 
 An ISO/IEC 27001:2022 Annex A SoA generated from existing mappings, controls, tests and evidence. Applicability and justification are edited in place; each save is a new version in an append-only log, and the SoA exports to PDF and CSV stamped with its version and date. The PDF is produced by a small built-in writer (`src/pdf.js`), with no dependencies.
 
+## Audit evidence package
+
+One action produces a dated ZIP, scoped to a framework or to all of them: approved policies at their approved versions (PDF), the control register and test records, the SoA, the risk register, exceptions, findings, attestations, an evidence index, the full audit trail and a hash-chain verification report. `manifest.json` lists the SHA-256 of every file; `verify-package.mjs` (Node 18+, no dependencies) re-checks the files and recomputes the audit chain. Each export is recorded in the audit trail with the manifest and ZIP hashes. Built with dependency-free ZIP and PDF writers (`src/zip.js`, `src/pdf.js`).
+
 ## Roles
 
 | Role | Can |

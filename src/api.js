@@ -9,6 +9,7 @@ import { audit, verifyChain } from './audit.js';
 import { registerControlRoutes } from './controls.js';
 import { registerFindingRoutes } from './findings.js';
 import { registerSoaRoutes } from './soa.js';
+import { registerPackageRoutes } from './package.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
 import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
@@ -1179,3 +1180,4 @@ route('PUT', '/api/settings', R.ADMIN, (ctx) => {
 const controlsApi = registerControlRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, evidenceView, hydratePolicy });
 const findingsApi = registerFindingRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, hydratePolicy, evidenceView });
 const soaApi = registerSoaRoutes({ route, R, controlsMap, userName, hydratePolicy, evidenceView });
+registerPackageRoutes({ route, R, controlsMap, userName, hydratePolicy, riskView, exceptionView, evidenceView, visibleFrameworks, soaApi });
