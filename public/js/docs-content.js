@@ -578,6 +578,36 @@ export const DOCS = [
     ],
   },
   {
+    id: 'audit-package', group: 'Assurance & admin', title: 'Audit evidence package', minutes: 4,
+    summary: 'One click: a dated, scoped ZIP of everything an auditor asks for, with a verifiable audit trail.',
+    blocks: [
+      { p: 'Before an audit, open <b>Audit Package</b> in the sidebar (under Assure). Choose a scope, such as <b>All frameworks</b> or a <b>SOC 2</b> or <b>ISO/IEC 27001</b> package, check what will be included, and click <b>Generate</b>. You get a single ZIP, named with the scope and date.' },
+      { figure: img('p1-audit-package'), caption: 'Choose a scope and see exactly what goes in before generating.' },
+      { h: 'What is in the package' },
+      { table: { head: ['File or folder', 'Contents'], rows: [
+        ['00-index.pdf', 'Scope, who generated it and when, the audit-trail status, and every file with its SHA-256 fingerprint.'],
+        ['policies/', 'Each approved policy as a PDF at its approved version, with all eight sections, framework references and revision history.'],
+        ['controls/', 'The control register (PDF and CSV) with owners, frequencies, latest results and effectiveness, plus every control test.'],
+        ['soa/', 'The Statement of Applicability (PDF and CSV), in all-framework and ISO/IEC 27001 packages.'],
+        ['risks/, exceptions/, findings/', 'The risk register, policy exceptions (open and closed), and findings with their corrective actions.'],
+        ['attestations/', 'Who acknowledged which policy version, and when.'],
+        ['evidence/', 'An index of evidence: title, location, owner, collection date and whether it is still current. Files stay where they are kept.'],
+        ['audit/', 'The complete audit trail (JSON lines, exactly as hashed, and CSV) and the hash-chain verification report.'],
+        ['manifest.json, verify-package.mjs', 'The SHA-256 of every file, and a script that verifies the package independently.'],
+      ] } },
+      { p: 'Scoped packages include the policies, controls, evidence, exceptions and findings linked to the chosen framework. The risk register and the audit trail are always complete, because an auditor needs the whole chain to verify it.' },
+      { figure: img('p3-package-index'), caption: 'The package index: scope, audit-trail status and the fingerprint of every file.' },
+      { h: 'Proving nothing was altered' },
+      { steps: [
+        { t: 'Unzip the package', d: 'Any ZIP tool works.' },
+        { t: 'Run the verification script', d: 'In the unzipped folder, run <code>node verify-package.mjs</code> (Node.js 18 or later; no other software). It checks every file against <b>manifest.json</b> and recomputes every hash in the audit trail.' },
+        { t: 'Read the result', d: 'It prints OK for the files and for the audit chain, or names the modified file or the first altered audit entry.' },
+      ] },
+      { p: 'Generating a package is itself recorded in the audit trail, with the SHA-256 of its manifest and of the ZIP. The list of packages on the same page shows each one, so a package handed to an auditor can be matched to its record.' },
+      { figure: img('p2-package-history'), caption: 'Every package generated, from the audit trail, with the audit-chain status at the time and the manifest fingerprint.' },
+    ],
+  },
+  {
     id: 'evidence', group: 'Risk & compliance', title: 'Collect evidence', minutes: 3,
     summary: 'Prove controls operate, and keep the proof fresh.',
     blocks: [
