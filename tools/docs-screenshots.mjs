@@ -493,6 +493,26 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await go('#/risks', '.t', 700);
   await shot('t2-risk-register-trace', '.card:last-of-type', 14, 'start');
 
+  console.log('Vendors');
+  const vA = await api('POST', '/api/vendors', { name: 'Payroll Cloud Ltd', service: 'Payroll processing and payslips', owner_id: me.id, criticality: 'High', data_access: 'restricted' });
+  await api('POST', '/api/vendors', { name: 'Northwind Hosting', service: 'Production cloud hosting', owner_id: kr.user.id, criticality: 'Critical', data_access: 'confidential', reassessment_due: '2026-08-31' });
+  await api('POST', '/api/vendors', { name: 'Brightdesk', service: 'IT helpdesk tooling', owner_id: me.id, criticality: 'Low', data_access: 'internal', reassessment_due: '2027-03-31' });
+  await go(`#/vendors/${vA.id}`, '#assess', 800);
+  await click('#assess'); await waitFor('#af'); await sleep(300);
+  await evaluate(`(() => { const ans = { cert: 'yes', enc_rest: 'yes', enc_transit: 'yes', mfa: 'yes', incident: 'partial', pentest: 'no', irp: 'yes', screening: 'yes', subprocessors: 'partial', exit: 'yes', bcp: 'yes', patching: 'yes' };
+    for (const [k, v] of Object.entries(ans)) document.querySelector('input[name="' + k + '"][value="' + v + '"]').click(); })()`);
+  await sleep(200);
+  await shot('v2-vendor-assess', '.modal', 20);
+  await click('#af-ok'); await sleep(900);
+  const soc = Buffer.from('%PDF-1.4\n% placeholder SOC 2 report used for the documentation screenshots\n%%EOF\n').toString('base64');
+  const rep = await api('POST', `/api/vendors/${vA.id}/reports`, { filename: 'payroll-cloud-soc2-type2-2026.pdf', report_type: 'SOC 2 Type II', period_end: '2026-09-30', opinion: 'unqualified', exceptions_noted: 'One exception: 2 of 25 leavers kept access beyond 24 hours.', content_base64: soc });
+  await apiAs(kwame, 'POST', `/api/vendor-reports/${rep.id}/review`, { note: 'Unqualified opinion. CUEC: we must review payroll admin access quarterly (covered by CTL-002).' });
+  await go('#/vendors', '.t', 300);
+  await go(`#/vendors/${vA.id}`, '.vq-list', 800);
+  await shot('v3-vendor');
+  await go('#/vendors', '.t', 800);
+  await shot('v1-vendors');
+
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);
   await click('#verify'); await waitFor('.notice.good'); await sleep(500);

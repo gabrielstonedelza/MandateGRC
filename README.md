@@ -156,6 +156,10 @@ One action produces a dated ZIP, scoped to a framework or to all of them: approv
 
 From any risk, one screen shows the full mitigation chain: the controls that mitigate it (linked directly, or operating a framework requirement the risk names), the policy statements behind each, their latest tests, their evidence and open findings, with a verdict (operating, gap, or none).
 
+## Vendors
+
+Lightweight third-party risk: vendor records with criticality and data access, a 12-question security questionnaire that drives a risk rating and the next reassessment date, and SOC 2 report upload (PDF stored under the data directory, named and verified by SHA-256) with a review by someone other than the uploader. Overdue reassessments and missing reports surface in the action queue.
+
 ## Roles
 
 | Role | Can |

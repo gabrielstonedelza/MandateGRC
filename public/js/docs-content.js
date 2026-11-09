@@ -617,6 +617,21 @@ export const DOCS = [
     ],
   },
   {
+    id: 'vendors', group: 'Risk & compliance', title: 'Vendors (third-party risk)', minutes: 4,
+    summary: 'Track the third parties that handle your data: criticality, a short security questionnaire, SOC 2 reports and reassessment dates.',
+    blocks: [
+      { p: 'Open <b>Vendors</b> (under Risk). Add each third party that processes your data or runs a service you depend on. No heavy workflow: enough to know who they are, how risky they are, whether you hold a current assurance report, and when to look again.' },
+      { figure: img('v1-vendors'), caption: 'The vendor register: criticality, data access, risk rating, the latest SOC 2 report and the reassessment date.' },
+      { steps: [
+        { t: 'Add the vendor', d: 'Click <b>New vendor</b>. Set the service, the <b>criticality</b> (impact on you if they fail), what <b>data</b> they can access, and the owner.' },
+        { t: 'Assess it', d: 'On the vendor, click <b>Assess</b> and answer the 12 questions (MFA, encryption, breach notification within 72 hours, penetration testing, subprocessors, exit and more) from their questionnaire response, SOC 2 report or contract.', img: img('v2-vendor-assess') },
+        { t: 'Read the rating', d: 'The <b>risk rating</b> combines exposure (criticality and data access) with the gaps in the answers. The next reassessment is scheduled automatically: 6 months for critical vendors, 12 for high and medium, 24 for low.' },
+        { t: 'Upload the SOC 2 report', d: 'Click <b>Upload report</b> and choose the PDF (up to 15 MB). Record the type, period end, opinion and any exceptions. The file is kept on your MandateGRC server, named by its SHA-256, and the hash is written to the audit trail. Someone other than the uploader clicks <b>Record review…</b> to note the outcome and any controls you must operate yourself (CUECs).', img: img('v3-vendor') },
+      ] },
+      { p: 'Overdue reassessments, critical or high vendors without a SOC 2 report covering the last 12 months, and reports awaiting review appear in the dashboard action queue. Offboard a vendor when the contract ends: it leaves the queue and keeps its history. The vendor register is included in every audit package.' },
+    ],
+  },
+  {
     id: 'evidence', group: 'Risk & compliance', title: 'Collect evidence', minutes: 3,
     summary: 'Prove controls operate, and keep the proof fresh.',
     blocks: [

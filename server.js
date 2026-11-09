@@ -41,13 +41,13 @@ function sendJson(res, status, obj) {
   send(res, status, JSON.stringify(obj), { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
 }
 
-function readBody(req) {
+function readBody(req, limit = MAX_BODY) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) { reject(new HttpError(413, 'Request body too large')); req.destroy(); return; }
+      if (size > limit) { reject(new HttpError(413, 'Request body too large')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
@@ -93,7 +93,7 @@ async function handleApi(req, res, url, ip, secure) {
   }
 
   if (isWrite) {
-    const raw = await readBody(req);
+    const raw = await readBody(req, m.route.opts?.maxBody || MAX_BODY);
     if (raw) {
       try { ctx.body = JSON.parse(raw); } catch { throw new HttpError(400, 'Malformed JSON'); }
       if (!ctx.body || typeof ctx.body !== 'object' || Array.isArray(ctx.body)) throw new HttpError(400, 'Body must be a JSON object');

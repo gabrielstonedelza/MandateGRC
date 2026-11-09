@@ -191,6 +191,11 @@ export function registerPackageRoutes({ route, R, controlsMap, userName, hydrate
     'Policy acknowledgement records per user and version');
     const ctlByEv = new Map();
     c.controls.forEach((k) => k.evidence_ids.forEach((id) => { if (!ctlByEv.has(id)) ctlByEv.set(id, []); ctlByEv.get(id).push(k.code); }));
+    const vendors = all('SELECT * FROM vendors WHERE org_id = ? ORDER BY code', org);
+    add('vendors/vendor-register.csv', csv(['Vendor', 'Name', 'Service', 'Criticality', 'Data access', 'Status', 'Risk rating', 'Assessed on', 'Reassessment due', 'Owner', 'Reports (type, period end, opinion, reviewed, SHA-256)'],
+      vendors.map((v) => [v.code, v.name, v.service, v.criticality, v.data_access, v.status, v.risk_rating || 'Not assessed', v.assessed_on || '', v.reassessment_due || '', userName(v.owner_id) || '',
+        all('SELECT * FROM vendor_reports WHERE vendor_id = ? ORDER BY id', v.id).map((r) => `${r.report_type}, ${r.period_end || 'n/a'}, ${r.opinion || 'n/a'}, ${r.reviewed_at ? `reviewed by ${userName(r.reviewed_by)}` : 'not reviewed'}, ${r.sha256}`).join(' | ')])),
+    'Vendor register (organization-wide): criticality, risk rating, reassessment dates and assurance reports');
     add('evidence/evidence-index.csv', csv(['Evidence', 'Title', 'Description', 'Location', 'Owner', 'Collected', 'Valid until', 'Status', 'Framework requirement', 'Controls'],
       c.evidence.map((e) => [e.id, e.title, e.description, e.location, e.owner, e.collected_on, e.expires_on, e.fresh ? 'Current' : 'Expired', ref(e.control_id), (ctlByEv.get(e.id) || []).join('; ')])),
     'Evidence index: what exists, where it is kept, and whether it is current (files stay at their locations)');

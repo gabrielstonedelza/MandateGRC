@@ -11,6 +11,7 @@ import { registerFindingRoutes } from './findings.js';
 import { registerSoaRoutes } from './soa.js';
 import { registerPackageRoutes } from './package.js';
 import { registerTraceRoutes } from './trace.js';
+import { registerVendorRoutes } from './vendors.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
 import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
@@ -471,7 +472,8 @@ route('GET', '/api/dashboard', R.READ, (ctx) => {
   policies.filter((p) => p.status === 'draft' && p.review_note).forEach((p) => actions.push({ kind: 'rework', severity: 'medium', title: `${p.code} returned for rework`, detail: p.review_note, link: `#/policies/${p.id}` }));
   const ctlSummary = controlsApi.summary(org, me);
   const fndSummary = findingsApi.summary(org, me);
-  actions.push(...ctlSummary.actions, ...fndSummary.actions);
+  const vndSummary = vendorsApi.summary(org, me);
+  actions.push(...ctlSummary.actions, ...fndSummary.actions, ...vndSummary.actions);
   const sevOrder = { critical: 0, high: 1, medium: 2, info: 3 };
   actions.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
 
@@ -483,6 +485,7 @@ route('GET', '/api/dashboard', R.READ, (ctx) => {
     evidence: { total: evidence.length, stale: evidence.filter((e) => !e.fresh).length, dueSoon: evidence.filter((e) => e.due_soon).length },
     controls: ctlSummary.stats,
     findings: fndSummary.stats,
+    vendors: vndSummary.stats,
     frameworks,
     actions: actions.slice(0, 25),
     recent: all('SELECT id, ts, username, action, entity, entity_id FROM audit_log WHERE org_id = ? ORDER BY id DESC LIMIT 8', org),
@@ -1187,3 +1190,4 @@ const findingsApi = registerFindingRoutes({ route, R, pid, notFound, forbidden, 
 const soaApi = registerSoaRoutes({ route, R, controlsMap, userName, hydratePolicy, evidenceView });
 registerPackageRoutes({ route, R, controlsMap, userName, hydratePolicy, riskView, exceptionView, evidenceView, visibleFrameworks, soaApi });
 registerTraceRoutes({ route, R, pid, notFound, controlsMap, userName, hydratePolicy, riskView, evidenceView });
+const vendorsApi = registerVendorRoutes({ route, R, pid, notFound, forbidden, userName });

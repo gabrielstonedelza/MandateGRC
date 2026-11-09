@@ -176,6 +176,57 @@ export const MIGRATIONS = [
     up: "ALTER TABLE risks ADD COLUMN org_control_ids TEXT NOT NULL DEFAULT '[]';",
     down: 'ALTER TABLE risks DROP COLUMN org_control_ids;',
   },
+  {
+    id: '007-vendors',
+    description: 'Vendor / third-party risk: vendors, security questionnaires and SOC 2 reports',
+    up: `
+      CREATE TABLE IF NOT EXISTS vendors (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        service TEXT NOT NULL DEFAULT '',
+        owner_id INTEGER REFERENCES users(id),
+        criticality TEXT NOT NULL DEFAULT 'Medium' CHECK (criticality IN ('Critical','High','Medium','Low')),
+        data_access TEXT NOT NULL DEFAULT 'internal' CHECK (data_access IN ('none','internal','confidential','restricted')),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','offboarded')),
+        questionnaire TEXT NOT NULL DEFAULT '{}',
+        assessed_on TEXT,
+        assessed_by INTEGER REFERENCES users(id),
+        risk_rating TEXT CHECK (risk_rating IN ('Critical','High','Medium','Low')),
+        reassessment_due TEXT,
+        notes TEXT NOT NULL DEFAULT '',
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        UNIQUE (org_id, code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_vendors_org ON vendors(org_id);
+      -- SOC 2 (or similar) reports. The PDF is stored under the data directory, named by its SHA-256.
+      CREATE TABLE IF NOT EXISTS vendor_reports (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        vendor_id INTEGER NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+        report_type TEXT NOT NULL CHECK (report_type IN ('SOC 2 Type II','SOC 2 Type I','ISO 27001 certificate','Other')),
+        filename TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        period_end TEXT,
+        opinion TEXT CHECK (opinion IN ('unqualified','qualified','adverse','not_applicable')),
+        exceptions_noted TEXT NOT NULL DEFAULT '',
+        uploaded_by INTEGER REFERENCES users(id),
+        uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        reviewed_by INTEGER REFERENCES users(id),
+        reviewed_at TEXT,
+        review_note TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_vendor_reports_vendor ON vendor_reports(vendor_id);
+    `,
+    down: `
+      DROP TABLE IF EXISTS vendor_reports;
+      DROP TABLE IF EXISTS vendors;
+    `,
+  },
 ];
 
 const ensureTable = (db) => db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

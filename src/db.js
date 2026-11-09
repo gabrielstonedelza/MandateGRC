@@ -308,7 +308,7 @@ export function tx(fn) {
 }
 
 // Human-friendly sequential codes (POL-001, RSK-001…) numbered per workspace.
-const CODE_TABLES = new Set(['policies', 'risks', 'exceptions', 'org_controls', 'findings']);
+const CODE_TABLES = new Set(['policies', 'risks', 'exceptions', 'org_controls', 'findings', 'vendors']);
 export function nextCode(table, prefix, orgId) {
   if (!CODE_TABLES.has(table)) throw new Error('bad table');
   const rows = all(`SELECT code FROM ${table} WHERE org_id = ? AND code LIKE ?`, orgId, prefix + '-%');
