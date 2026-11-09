@@ -2,7 +2,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer, client } from './server.mjs';
-import { rateVendor, QUESTIONS } from '../src/vendors.js';
+import { rateVendor, QUESTIONS } from '../src/vendor-rating.js';
 
 let srv, admin, analyst, approver;
 const join = async (role) => client(srv.base, { invite: (await admin.post('/api/invites', { role })).code });

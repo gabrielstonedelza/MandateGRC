@@ -3,6 +3,7 @@
 import { html, mount, GET, fmtDate, pill, icon } from '../core.js';
 import { riskLevel } from '../lint.js';
 import { sevPill, statusPill } from './findings.js';
+import { assetsPanel } from './assets.js';
 
 const RESULT = { pass: ['ok', 'Pass'], fail: ['critical', 'Fail'], exception: ['medium', 'Exception'], not_tested: ['info', 'Not yet tested'] };
 const VERDICT = {
@@ -12,7 +13,7 @@ const VERDICT = {
 };
 
 export async function riskTraceView(el, id) {
-  const d = await GET(`/api/risks/${id}/trace`);
+  const [d, assets] = await Promise.all([GET(`/api/risks/${id}/trace`), GET(`/api/assets?risk_id=${id}`)]);
   const r = d.risk;
   const [vk, vl, vd] = VERDICT[d.verdict];
   mount(el, html`
@@ -45,7 +46,7 @@ export async function riskTraceView(el, id) {
         </ol>`)}</div>` : html`<div class="empty"><b>No mitigating controls</b>Open the risk in the register and choose controls under “Mitigating controls”, or create controls in the <a href="#/controls">control register</a> that operate the framework requirements below.</div>`}
     </section>
 
-    <div class="grid g3">
+    <div class="grid g2">
       <section class="card" aria-labelledby="rq-h"><div class="card-h"><h3 id="rq-h">Framework requirements</h3></div><div class="card-b stack">
         ${d.requirements.length ? d.requirements.map((q) => html`<div class="chain-item"><span class="ref">${q.framework_code} ${q.ref}</span><span>${q.title}</span><small>${q.operated_by.length ? `Operated by ${q.operated_by.join(', ')}` : html`<b class="bad-text">No control operates it</b>`}</small></div>`) : html`<div class="chain-empty">None linked to this risk.</div>`}
         <p class="map-disclaimer">Control mappings are guidance, not a substitute for your auditor's judgment.</p></div></section>
@@ -53,5 +54,6 @@ export async function riskTraceView(el, id) {
         ${d.policies.length ? d.policies.map((p) => html`<a class="chain-item" href="#/policies/${p.id}"><span class="ref">${p.code}</span><span>${p.title}</span><small>${p.status.replace('_', ' ')}${p.version !== '0.0' ? ` · v${p.version}` : ''}</small></a>`) : html`<div class="chain-empty">No policy linked to this risk.</div>`}</div></section>
       <section class="card" aria-labelledby="fd-h"><div class="card-h"><h3 id="fd-h">Findings</h3></div><div class="card-b stack">
         ${d.findings.length ? d.findings.map((f) => html`<a class="chain-item" href="#/findings/${f.id}"><span class="ref">${f.code}</span><span>${f.title}</span><small class="row">${sevPill(f.severity)} ${statusPill(f.status)}${f.overdue ? html` <b class="bad-text">overdue</b>` : ''}</small></a>`) : html`<div class="chain-empty">No findings for this risk or its controls.</div>`}</div></section>
+      <section class="card" aria-labelledby="as-h"><div class="card-h"><h3 id="as-h">Assets at risk</h3></div><div class="card-b">${assetsPanel(assets, { empty: 'No asset references this risk.' })}</div></section>
     </div>`);
 }

@@ -12,6 +12,7 @@ import { registerSoaRoutes } from './soa.js';
 import { registerPackageRoutes } from './package.js';
 import { registerTraceRoutes } from './trace.js';
 import { registerVendorRoutes } from './vendors.js';
+import { registerAssetRoutes } from './assets.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
 import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
@@ -1191,3 +1192,4 @@ const soaApi = registerSoaRoutes({ route, R, controlsMap, userName, hydratePolic
 registerPackageRoutes({ route, R, controlsMap, userName, hydratePolicy, riskView, exceptionView, evidenceView, visibleFrameworks, soaApi });
 registerTraceRoutes({ route, R, pid, notFound, controlsMap, userName, hydratePolicy, riskView, evidenceView });
 const vendorsApi = registerVendorRoutes({ route, R, pid, notFound, forbidden, userName });
+const assetsApi = registerAssetRoutes({ route, R, pid, notFound, userName, visibleFrameworks });

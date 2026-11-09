@@ -227,6 +227,34 @@ export const MIGRATIONS = [
       DROP TABLE IF EXISTS vendors;
     `,
   },
+  {
+    id: '008-assets',
+    description: 'Asset register for scoping (referenced by policies, controls and risks)',
+    up: `
+      CREATE TABLE IF NOT EXISTS assets (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        asset_type TEXT NOT NULL DEFAULT 'System' CHECK (asset_type IN ('System','Application','Data','Cloud service','Network','Endpoint','Facility','Other')),
+        description TEXT NOT NULL DEFAULT '',
+        owner_id INTEGER REFERENCES users(id),
+        classification TEXT NOT NULL DEFAULT 'Internal' CHECK (classification IN ('Public','Internal','Confidential','Restricted')),
+        environment TEXT NOT NULL DEFAULT 'Production' CHECK (environment IN ('Production','Staging','Development','Corporate')),
+        scope_tags TEXT NOT NULL DEFAULT '[]',
+        policy_ids TEXT NOT NULL DEFAULT '[]',
+        control_ids TEXT NOT NULL DEFAULT '[]',
+        risk_ids TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','retired')),
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        UNIQUE (org_id, code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_assets_org ON assets(org_id);
+    `,
+    down: 'DROP TABLE IF EXISTS assets;',
+  },
 ];
 
 const ensureTable = (db) => db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

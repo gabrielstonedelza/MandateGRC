@@ -4,6 +4,7 @@ import { html, mount, $, on, state, can, GET, POST, PUT, toast, fail, modal, con
 import { controlPicker, MAP_DISCLAIMER } from './policies.js';
 import { fwName } from './shared.js';
 import { findingForm, sevPill, statusPill } from './findings.js';
+import { assetsPanel } from './assets.js';
 
 const FREQ = { continuous: 'Continuous', monthly: 'Monthly', quarterly: 'Quarterly', semiannual: 'Every 6 months', annual: 'Annually' };
 const RESULT = { pass: ['ok', 'Pass'], fail: ['critical', 'Fail'], exception: ['medium', 'Exception'], not_tested: ['info', 'Not yet tested'] };
@@ -77,7 +78,7 @@ function kpi(label, value, foot, tone = '') {
 // Detail: the full chain, tests and actions
 // =====================================================================
 export async function controlDetailView(el, id) {
-  let [c, findings] = await Promise.all([GET(`/api/control-register/${id}`), GET(`/api/findings?control_id=${id}`)]);
+  let [c, findings, assets] = await Promise.all([GET(`/api/control-register/${id}`), GET(`/api/findings?control_id=${id}`), GET(`/api/assets?control_id=${id}`)]);
   const me = state.me;
   const reload = async () => { [c, findings] = await Promise.all([GET(`/api/control-register/${id}`), GET(`/api/findings?control_id=${id}`)]); draw(); };
 
@@ -142,6 +143,9 @@ export async function controlDetailView(el, id) {
           </tr>`)}</tbody></table></div>`
           : html`<div class="empty"><b>No tests yet</b>${c.design_status === 'approved' ? 'Record the first test to show this control operates.' : 'Approve the design first.'}</div>`}
       </section>
+
+      <section class="card" aria-labelledby="ca-h"><div class="card-h"><h3 id="ca-h">Assets in scope</h3><span class="muted small">Assets this control protects</span></div>
+        <div class="card-b">${assetsPanel(assets, { empty: 'No asset references this control. Link it from Assets.' })}</div></section>
 
       <section class="card" aria-labelledby="cf-h">
         <div class="card-h"><h3 id="cf-h">Findings</h3><span class="muted small">Corrective actions linked to this control</span>${can.write() ? html`<button class="btn xs right" id="new-finding">${icon('plus')} New finding</button>` : ''}</div>

@@ -632,6 +632,21 @@ export const DOCS = [
     ],
   },
   {
+    id: 'assets', group: 'Risk & compliance', title: 'Assets and audit scope', minutes: 3,
+    summary: 'A simple inventory of what you protect, used to define and evidence ISO 27001 and PCI DSS scope.',
+    blocks: [
+      { p: 'Open <b>Assets</b> (under Comply) and add the systems, applications, data stores and services that matter. For each, record the <b>owner</b>, <b>classification</b> (Public, Internal, Confidential, Restricted) and <b>environment</b>, and tick the frameworks whose scope it falls in: for example the ISO/IEC 27001 ISMS scope or the PCI DSS cardholder data environment.' },
+      { figure: img('a1-assets'), caption: 'The asset register: owner, classification, environment, scope and how many policies, controls and risks cover each asset. Filter by type, classification, environment or scope.' },
+      { steps: [
+        { t: 'Add an asset', d: 'Click <b>New asset</b>, name it and set its type, owner, classification and environment.' },
+        { t: 'Tag its scope', d: 'Under <b>In scope of</b>, tick each framework whose audit scope includes it.' },
+        { t: 'Link what covers it', d: 'Tick the policies that apply to it, the controls that protect it and the risks to it. Those pages then list it under <b>Assets in scope</b>.', img: img('a2-asset-form') },
+      ] },
+      { figure: img('a3-control-assets'), caption: 'Every control, risk traceability view and policy shows the assets that reference it.' },
+      { p: 'The summary flags assets without an owner and assets no control protects, which are the usual scoping gaps. Audit packages include the asset register; a framework-scoped package lists the assets tagged with that framework or linked to its controls and policies. Retire an asset when it is decommissioned: it keeps its history.' },
+    ],
+  },
+  {
     id: 'evidence', group: 'Risk & compliance', title: 'Collect evidence', minutes: 3,
     summary: 'Prove controls operate, and keep the proof fresh.',
     blocks: [

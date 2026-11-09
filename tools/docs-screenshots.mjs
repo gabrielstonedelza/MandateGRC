@@ -513,6 +513,22 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
   await go('#/vendors', '.t', 800);
   await shot('v1-vendors');
 
+  console.log('Assets');
+  const polList = await api('GET', '/api/policies');
+  const acpId = polList.find((x) => /Access Control/.test(x.title))?.id;
+  await api('POST', '/api/assets', { name: 'Customer payments API', asset_type: 'Application', description: 'Card tokenisation and payment orchestration service.', owner_id: me.id, classification: 'Restricted', environment: 'Production', scope_tags: ['ISO27001', 'PCIDSS', 'SOC2'], policy_ids: acpId ? [acpId] : [], control_ids: [ctlA.id], risk_ids: [tr.id] });
+  await api('POST', '/api/assets', { name: 'Corporate VPN gateway', asset_type: 'Network', owner_id: kr.user.id, classification: 'Confidential', environment: 'Corporate', scope_tags: ['ISO27001'], control_ids: [ctlA.id], risk_ids: [tr.id] });
+  await api('POST', '/api/assets', { name: 'HR records (Payroll Cloud)', asset_type: 'Data', owner_id: me.id, classification: 'Restricted', environment: 'Production', scope_tags: ['ISO27001', 'GDPR'] });
+  await api('POST', '/api/assets', { name: 'Staging Kubernetes cluster', asset_type: 'Cloud service', classification: 'Internal', environment: 'Staging', scope_tags: [] });
+  await go('#/assets', '.t', 800);
+  await shot('a1-assets');
+  await click('tr[data-id]'); await waitFor('#asf'); await sleep(500);
+  await shot('a2-asset-form', '.drawer', 0);
+  await closeModals(); await sleep(300);
+  await go(`#/controls/${ctlA.id}`, '#ca-h', 800);
+  await evaluate(`document.querySelector('#ca-h').scrollIntoView({ block: 'center' })`); await sleep(300);
+  await shot('a3-control-assets', 'section[aria-labelledby=ca-h]', 14, 'start');
+
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);
   await click('#verify'); await waitFor('.notice.good'); await sleep(500);

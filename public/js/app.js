@@ -14,6 +14,7 @@ import { soaView } from './views/soa.js';
 import { packageView } from './views/package.js';
 import { riskTraceView } from './views/trace.js';
 import { vendorsView, vendorDetailView } from './views/vendors.js';
+import { assetsView } from './views/assets.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -38,6 +39,7 @@ const NAV = [
     { href: '#/controls', label: 'Control Register', icon: 'control', show: can.read },
     { href: '#/frameworks', label: 'Frameworks & Controls', icon: 'framework', show: can.read },
     { href: '#/soa', label: 'Statement of Applicability', icon: 'scale', show: can.read },
+    { href: '#/assets', label: 'Assets', icon: 'server', show: can.read },
     { href: '#/evidence', label: 'Evidence', icon: 'evidence', show: can.read },
   ] },
   { group: 'Assure', items: [
@@ -69,6 +71,7 @@ const ROUTES = [
   [/^\/controls$/, controlsView, 'Control Register', can.read],
   [/^\/controls\/(\d+)$/, controlDetailView, 'Control Register', can.read],
   [/^\/frameworks(?:\/([A-Za-z0-9_-]+))?$/, frameworksView, 'Frameworks & Controls', can.read],
+  [/^\/assets$/, assetsView, 'Assets', can.read],
   [/^\/evidence$/, evidenceView, 'Evidence', can.read],
   [/^\/audit$/, auditView, 'Audit Trail', can.audit],
   [/^\/audit-package$/, packageView, 'Audit Package', can.audit],

@@ -898,3 +898,5 @@ td.hash { word-break: break-all; max-width: 280px; white-space: normal; }
 .vq-opt { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; cursor: pointer; }
 .vq-opt input { width: auto; accent-color: var(--gold); }
 .t td > small.muted { display: block; }
+.scope-tags { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.scope-tags legend { width: 100%; margin-bottom: 4px; }

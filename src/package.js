@@ -196,6 +196,13 @@ export function registerPackageRoutes({ route, R, controlsMap, userName, hydrate
       vendors.map((v) => [v.code, v.name, v.service, v.criticality, v.data_access, v.status, v.risk_rating || 'Not assessed', v.assessed_on || '', v.reassessment_due || '', userName(v.owner_id) || '',
         all('SELECT * FROM vendor_reports WHERE vendor_id = ? ORDER BY id', v.id).map((r) => `${r.report_type}, ${r.period_end || 'n/a'}, ${r.opinion || 'n/a'}, ${r.reviewed_at ? `reviewed by ${userName(r.reviewed_by)}` : 'not reviewed'}, ${r.sha256}`).join(' | ')])),
     'Vendor register (organization-wide): criticality, risk rating, reassessment dates and assurance reports');
+    const assetRows = all('SELECT * FROM assets WHERE org_id = ? ORDER BY code', org).map((a) => ({ ...a, scope_tags: parseJson(a.scope_tags, []), policy_ids: parseJson(a.policy_ids, []), control_ids: parseJson(a.control_ids, []), risk_ids: parseJson(a.risk_ids, []) }))
+      .filter((a) => c.scope === 'all' || a.scope_tags.includes(c.scope) || a.control_ids.some((id) => c.controls.some((k) => k.id === id)) || a.policy_ids.some((id) => c.policies.some((p) => p.id === id)));
+    add('assets/asset-register.csv', csv(['Asset', 'Name', 'Type', 'Owner', 'Classification', 'Environment', 'Status', 'In scope of', 'Policies', 'Controls', 'Risks', 'Description'],
+      assetRows.map((a) => [a.code, a.name, a.asset_type, userName(a.owner_id) || '', a.classification, a.environment, a.status, a.scope_tags.join('; '),
+        a.policy_ids.map((id) => get('SELECT code FROM policies WHERE id = ?', id)?.code).filter(Boolean).join('; '), a.control_ids.map((id) => get('SELECT code FROM org_controls WHERE id = ?', id)?.code).filter(Boolean).join('; '),
+        a.risk_ids.map((id) => get('SELECT code FROM risks WHERE id = ?', id)?.code).filter(Boolean).join('; '), a.description])),
+    'Asset register for scoping: owners, classification, environment and the frameworks each asset is in scope of');
     add('evidence/evidence-index.csv', csv(['Evidence', 'Title', 'Description', 'Location', 'Owner', 'Collected', 'Valid until', 'Status', 'Framework requirement', 'Controls'],
       c.evidence.map((e) => [e.id, e.title, e.description, e.location, e.owner, e.collected_on, e.expires_on, e.fresh ? 'Current' : 'Expired', ref(e.control_id), (ctlByEv.get(e.id) || []).join('; ')])),
     'Evidence index: what exists, where it is kept, and whether it is current (files stay at their locations)');
