@@ -5,7 +5,7 @@ import { controlPicker } from './policies.js';
 import { sevPill, statusPill } from './findings.js';
 
 export async function risksView(el) {
-  let [risks, policies] = await Promise.all([GET('/api/risks'), GET('/api/policies')]);
+  let [risks, policies, regControls] = await Promise.all([GET('/api/risks'), GET('/api/policies'), GET('/api/control-register')]);
   const appetite = state.meta.risk_appetite;
   let filter = null, q = '', showClosed = false;
 
@@ -41,7 +41,7 @@ export async function risksView(el) {
       <div class="card">
         <div class="card-h"><h3>Register</h3><label class="row small dim"><input type="checkbox" id="closed" ${showClosed ? 'checked' : ''}> Show closed</label>
           <div class="right search"><span>${icon('search')}</span><input id="q" value="${q}" placeholder="Search risks" aria-label="Search risks"></div></div>
-        ${rows.length ? html`<div class="table-wrap"><table class="t"><thead><tr><th>Risk</th><th>Owner</th><th>Inherent</th><th>Residual</th><th>Treatment</th><th>Status</th><th>Due</th><th class="num">ALE</th></tr></thead><tbody>
+        ${rows.length ? html`<div class="table-wrap"><table class="t"><thead><tr><th>Risk</th><th>Owner</th><th>Inherent</th><th>Residual</th><th>Treatment</th><th>Status</th><th>Due</th><th class="num">ALE</th><th>Mitigation</th></tr></thead><tbody>
           ${rows.map((r) => html`<tr class="clickable" data-id="${r.id}">
             <td class="title-cell"><b>${r.title}</b><small>${r.code} · ${r.category}${r.above_appetite ? ' · above appetite' : ''}</small></td>
             <td>${r.owner}</td>
@@ -49,7 +49,8 @@ export async function risksView(el) {
             <td>${pill(r.residual_level, `${r.residual} ${riskLevel(r.residual).label}`)}</td>
             <td>${r.treatment}</td><td>${pill(r.status)}</td>
             <td class="${r.due_date && r.due_date < new Date().toISOString().slice(0, 10) && r.status !== 'Closed' ? 's-critical' : ''}">${fmtDate(r.due_date)}</td>
-            <td class="num">${money(r.ale)}</td></tr>`)}
+            <td class="num">${money(r.ale)}</td>
+            <td><a class="btn xs" href="#/risks/${r.id}" title="Open the traceability view: controls, policy statements, tests and evidence">${icon('link')} ${r.org_control_ids.length ? `${r.org_control_ids.length} control${r.org_control_ids.length === 1 ? '' : 's'}` : 'Trace'}</a></td></tr>`)}
         </tbody></table></div>` : html`<div class="empty"><b>No risks match</b></div>`}
       </div>`);
     $('#q', el).addEventListener('input', (e) => { q = e.target.value.toLowerCase(); const pos = e.target.selectionStart; draw(); const i = $('#q', el); i.focus(); i.setSelectionRange(pos, pos); });
@@ -59,13 +60,13 @@ export async function risksView(el) {
   on(el, 'click', '[data-cell]', (e, c) => { const [l, i] = c.dataset.cell.split(',').map(Number); filter = filter && filter[0] === l && filter[1] === i ? null : [l, i]; draw(); });
   on(el, 'click', '#clear', () => { filter = null; draw(); });
   on(el, 'change', '#closed', (e, c) => { showClosed = c.checked; draw(); });
-  on(el, 'click', '#new', () => riskForm(null, policies, async () => { risks = await GET('/api/risks'); draw(); }));
-  on(el, 'click', 'tr[data-id]', (e, tr) => riskForm(risks.find((r) => r.id === Number(tr.dataset.id)), policies, async () => { risks = await GET('/api/risks'); draw(); }));
+  on(el, 'click', '#new', () => riskForm(null, policies, async () => { risks = await GET('/api/risks'); draw(); }, regControls));
+  on(el, 'click', 'tr[data-id]', (e, tr) => { if (e.target.closest('a')) return; riskForm(risks.find((r) => r.id === Number(tr.dataset.id)), policies, async () => { risks = await GET('/api/risks'); draw(); }, regControls); });
 }
 
-function riskForm(r, policies, done) {
+function riskForm(r, policies, done, regControls = []) {
   const editable = can.write();
-  const v = r || { title: '', description: '', category: 'Information Security', owner: '', likelihood: 3, impact: 3, res_likelihood: 2, res_impact: 3, treatment: 'Mitigate', treatment_plan: '', status: 'Open', due_date: '', sle: '', aro: '', policy_ids: [], control_ids: [] };
+  const v = r || { title: '', description: '', category: 'Information Security', owner: '', likelihood: 3, impact: 3, res_likelihood: 2, res_impact: 3, treatment: 'Mitigate', treatment_plan: '', status: 'Open', due_date: '', sle: '', aro: '', policy_ids: [], control_ids: [], org_control_ids: [] };
   let controlIds = [...v.control_ids];
   const scale = (name, labels, val) => html`<select name="${name}" ${editable ? '' : 'disabled'}>${labels.map((l, i) => html`<option value="${i + 1}" ${i + 1 === val ? 'selected' : ''}>${i + 1}. ${l}</option>`)}</select>`;
   const cmap = new Map(state.meta.controls.map((c) => [c.id, c]));
@@ -92,11 +93,13 @@ function riskForm(r, policies, done) {
         <label class="f"><span>Annual rate of occurrence <em>e.g. 0.25</em></span><input type="number" min="0" max="365" step="0.01" name="aro" value="${v.aro ?? ''}" ${editable ? '' : 'readonly'}></label>
         <div class="full small dim" id="ale"></div>
         <label class="f full"><span>Policies that govern this risk</span><select name="policy_ids" multiple size="5" ${editable ? '' : 'disabled'}>${policies.filter((p) => p.status !== 'retired').map((p) => html`<option value="${p.id}" ${v.policy_ids.includes(p.id) ? 'selected' : ''}>${p.code} ${p.title}</option>`)}</select></label>
-        <div class="full"><div class="section-label">Mitigating controls</div><div class="chips" id="rc"></div></div>
+        <div class="full"><div class="section-label">Mitigating controls <em class="muted">(from the control register)</em></div>
+          <div class="stmt-pick small-pick" role="group" aria-label="Mitigating controls">${regControls.length ? regControls.filter((c) => c.status === 'active' || (v.org_control_ids || []).includes(c.id)).map((c) => html`<label class="pick"><input type="checkbox" data-oc="${c.id}" ${(v.org_control_ids || []).includes(c.id) ? 'checked' : ''} ${editable ? '' : 'disabled'}><span class="ref">${c.code}</span><span>${c.name}<small>${c.result === 'not_tested' ? 'Not yet tested' : `Latest result: ${c.result}`}${c.overdue ? ' · overdue' : ''}</small></span></label>`) : html`<div class="muted small">No controls in the register yet.</div>`}</div></div>
+        <div class="full"><div class="section-label">Framework requirements it relates to</div><div class="chips" id="rc"></div></div>
         ${r ? html`<div class="full"><div class="section-label">Findings</div><div id="rfind" class="muted small">Loading…</div></div>` : ''}
       </div>
     </form>`,
-    footer: html`${r && can.admin() ? html`<button class="btn danger" data-del>${icon('trash')} Delete</button>` : ''}<span class="right"></span><button class="btn ghost" data-close>${editable ? 'Cancel' : 'Close'}</button>${editable ? html`<button class="btn primary" data-save>${r ? 'Save risk' : 'Add risk'}</button>` : ''}`,
+    footer: html`${r && can.admin() ? html`<button class="btn danger" data-del>${icon('trash')} Delete</button>` : ''}${r ? html`<a class="btn" href="#/risks/${r.id}" data-close>${icon('link')} Traceability</a>` : ''}<span class="right"></span><button class="btn ghost" data-close>${editable ? 'Cancel' : 'Close'}</button>${editable ? html`<button class="btn primary" data-save>${r ? 'Save risk' : 'Add risk'}</button>` : ''}`,
     onMount: ({ el, close }) => {
       const form = $('#rf', el);
       const recalc = () => {
@@ -120,7 +123,7 @@ function riskForm(r, policies, done) {
       on(el, 'click', '[data-pick]', () => controlPicker({ text: `${form.elements.namedItem("title").value} ${form.description.value} ${form.treatment_plan.value}`, selected: controlIds, title: 'Mitigating controls', onSave: (ids) => { controlIds = ids; drawControls(); } }));
       on(el, 'click', '[data-save]', async () => {
         const d = formData(form);
-        const body = { ...d, policy_ids: d.policy_ids.map(Number), control_ids: controlIds };
+        const body = { ...d, policy_ids: d.policy_ids.map(Number), control_ids: controlIds, org_control_ids: [...el.querySelectorAll('[data-oc]:checked')].map((x) => Number(x.dataset.oc)) };
         try {
           if (r) await PUT(`/api/risks/${r.id}`, body); else await POST('/api/risks', body);
           toast(r ? 'Risk updated.' : 'Risk added.'); close(); await done();

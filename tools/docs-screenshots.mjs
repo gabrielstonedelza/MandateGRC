@@ -482,6 +482,17 @@ const closeModals = () => evaluate(`[...document.querySelectorAll('.modal-h [dat
     console.log('  ✓ p3-package-index');
   } catch { console.log('  · p3-package-index skipped (needs macOS sips)'); }
 
+  console.log('Risk traceability');
+  const riskList = await api('GET', '/api/risks');
+  const tr = riskList.find((x) => /access|account|credential|phish/i.test(x.title)) || riskList[0];
+  await api('PUT', `/api/risks/${tr.id}`, { ...tr, org_control_ids: [ctlA.id, ctlB.id], control_ids: [...new Set([...tr.control_ids, fwId('ISO27001', '8.5'), fwId('ISO27001', '8.2')])] });
+  await go(`#/risks/${tr.id}`, '.trace-rows, .empty', 900);
+  const trv = await evaluate(`document.querySelector('.trace-verdict b')?.textContent`);
+  console.log('    trace verdict:', trv);
+  await shot('t1-risk-trace');
+  await go('#/risks', '.t', 700);
+  await shot('t2-risk-register-trace', '.card:last-of-type', 14, 'start');
+
   console.log('Assurance & administration');
   await go('#/audit', '#verify', 700);
   await click('#verify'); await waitFor('.notice.good'); await sleep(500);

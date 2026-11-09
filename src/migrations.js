@@ -170,6 +170,12 @@ export const MIGRATIONS = [
       DROP TABLE IF EXISTS soa_entries;
     `,
   },
+  {
+    id: '006-risk-controls',
+    description: 'Link risks to the controls in the control register that mitigate them',
+    up: "ALTER TABLE risks ADD COLUMN org_control_ids TEXT NOT NULL DEFAULT '[]';",
+    down: 'ALTER TABLE risks DROP COLUMN org_control_ids;',
+  },
 ];
 
 const ensureTable = (db) => db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

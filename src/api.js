@@ -10,6 +10,7 @@ import { registerControlRoutes } from './controls.js';
 import { registerFindingRoutes } from './findings.js';
 import { registerSoaRoutes } from './soa.js';
 import { registerPackageRoutes } from './package.js';
+import { registerTraceRoutes } from './trace.js';
 import { TEMPLATES } from './templates.js';
 import { templateToPolicy, seedSampleData } from './seed.js';
 import { lintPolicy, reviewPolicy, metricSummary, riskLevel, POLICY_TYPE_OPTIONS } from '../public/js/lint.js';
@@ -124,6 +125,7 @@ function riskView(r, appetite = orgSettings(r.org_id).risk_appetite) {
     ...r,
     policy_ids: parseJson(r.policy_ids, []),
     control_ids: parseJson(r.control_ids, []),
+    org_control_ids: parseJson(r.org_control_ids, []),
     inherent, residual,
     inherent_level: riskLevel(inherent).key,
     residual_level: riskLevel(residual).key,
@@ -829,6 +831,8 @@ function validateRisk(b, org) {
     aro: num(b.aro, { name: 'Annual rate of occurrence', max: 365 }),
     policy_ids: idList(b.policy_ids, { name: 'Policies' }).filter((id) => get('SELECT id FROM policies WHERE id = ? AND org_id = ?', id, org)),
     control_ids: idList(b.control_ids, { name: 'Controls' }).filter((id) => cmap.has(id)),
+    // Controls from the control register that mitigate this risk.
+    org_control_ids: idList(b.org_control_ids || [], { name: 'Mitigating controls' }).filter((id) => get('SELECT id FROM org_controls WHERE id = ? AND org_id = ?', id, org)),
   };
 }
 route('GET', '/api/risks', R.READ, (ctx) => {
@@ -839,9 +843,9 @@ route('POST', '/api/risks', R.WRITE, (ctx) => {
   const v = validateRisk(ctx.body, ctx.user.org_id);
   if (v.res_likelihood * v.res_impact > v.likelihood * v.impact) throw bad('Residual risk cannot exceed inherent risk.');
   const code = nextCode('risks', 'RSK', ctx.user.org_id);
-  const r = run(`INSERT INTO risks(org_id, code, title, description, category, owner, likelihood, impact, res_likelihood, res_impact, treatment, treatment_plan, status, due_date, sle, aro, policy_ids, control_ids, created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ctx.user.org_id, code, v.title, v.description, v.category, v.owner, v.likelihood, v.impact,
-    v.res_likelihood, v.res_impact, v.treatment, v.treatment_plan, v.status, v.due_date, v.sle, v.aro, JSON.stringify(v.policy_ids), JSON.stringify(v.control_ids), ctx.user.id);
+  const r = run(`INSERT INTO risks(org_id, code, title, description, category, owner, likelihood, impact, res_likelihood, res_impact, treatment, treatment_plan, status, due_date, sle, aro, policy_ids, control_ids, org_control_ids, created_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ctx.user.org_id, code, v.title, v.description, v.category, v.owner, v.likelihood, v.impact,
+    v.res_likelihood, v.res_impact, v.treatment, v.treatment_plan, v.status, v.due_date, v.sle, v.aro, JSON.stringify(v.policy_ids), JSON.stringify(v.control_ids), JSON.stringify(v.org_control_ids), ctx.user.id);
   audit(ctx.actor, 'risk.created', 'risk', Number(r.lastInsertRowid), { code, title: v.title, inherent: v.likelihood * v.impact });
   return { id: Number(r.lastInsertRowid) };
 });
@@ -851,11 +855,12 @@ route('PUT', '/api/risks/:id', R.WRITE, (ctx) => {
   if (!old) throw notFound('Risk');
   const v = validateRisk(ctx.body, ctx.user.org_id);
   if (v.res_likelihood * v.res_impact > v.likelihood * v.impact) throw bad('Residual risk cannot exceed inherent risk.');
-  run(`UPDATE risks SET title=?, description=?, category=?, owner=?, likelihood=?, impact=?, res_likelihood=?, res_impact=?, treatment=?, treatment_plan=?, status=?, due_date=?, sle=?, aro=?, policy_ids=?, control_ids=?, updated_at=? WHERE id=?`,
+  run(`UPDATE risks SET title=?, description=?, category=?, owner=?, likelihood=?, impact=?, res_likelihood=?, res_impact=?, treatment=?, treatment_plan=?, status=?, due_date=?, sle=?, aro=?, policy_ids=?, control_ids=?, org_control_ids=?, updated_at=? WHERE id=?`,
     v.title, v.description, v.category, v.owner, v.likelihood, v.impact, v.res_likelihood, v.res_impact, v.treatment, v.treatment_plan, v.status, v.due_date, v.sle, v.aro,
-    JSON.stringify(v.policy_ids), JSON.stringify(v.control_ids), nowIso(), id);
+    JSON.stringify(v.policy_ids), JSON.stringify(v.control_ids), JSON.stringify(v.org_control_ids), nowIso(), id);
   const changes = {};
   for (const k of ['likelihood', 'impact', 'res_likelihood', 'res_impact', 'status', 'treatment', 'owner']) if (old[k] !== v[k]) changes[k] = [old[k], v[k]];
+  for (const k of ['policy_ids', 'control_ids', 'org_control_ids']) if (old[k] !== JSON.stringify(v[k])) changes[k] = [parseJson(old[k], []).length, v[k].length];
   audit(ctx.actor, 'risk.updated', 'risk', id, { code: old.code, changes });
   return { ok: true };
 });
@@ -1181,3 +1186,4 @@ const controlsApi = registerControlRoutes({ route, R, pid, notFound, forbidden, 
 const findingsApi = registerFindingRoutes({ route, R, pid, notFound, forbidden, controlsMap, userName, hydratePolicy, evidenceView });
 const soaApi = registerSoaRoutes({ route, R, controlsMap, userName, hydratePolicy, evidenceView });
 registerPackageRoutes({ route, R, controlsMap, userName, hydratePolicy, riskView, exceptionView, evidenceView, visibleFrameworks, soaApi });
+registerTraceRoutes({ route, R, pid, notFound, controlsMap, userName, hydratePolicy, riskView, evidenceView });

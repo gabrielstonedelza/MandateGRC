@@ -9,6 +9,7 @@ function base() {
   db.exec(`PRAGMA foreign_keys = ON;
     CREATE TABLE orgs (id INTEGER PRIMARY KEY, name TEXT);
     CREATE TABLE users (id INTEGER PRIMARY KEY, org_id INTEGER, username TEXT);
+    CREATE TABLE policies (id INTEGER PRIMARY KEY); CREATE TABLE risks (id INTEGER PRIMARY KEY); CREATE TABLE exceptions (id INTEGER PRIMARY KEY);
     INSERT INTO orgs VALUES (1, 'o'); INSERT INTO users VALUES (1, 1, 'u');`);
   return db;
 }
@@ -40,7 +41,6 @@ test('control test records are immutable except for failure closure', () => {
 test('004 converts open Phase 1 test failures into findings, once', async () => {
   const { MIGRATIONS: all } = await import('../src/migrations.js');
   const db = base();
-  db.exec('CREATE TABLE policies (id INTEGER PRIMARY KEY); CREATE TABLE risks (id INTEGER PRIMARY KEY); CREATE TABLE exceptions (id INTEGER PRIMARY KEY);');
   // Apply only 003, record an open failure, then apply 004.
   db.exec('CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, description TEXT, applied_at TEXT)');
   db.exec(all[0].up);

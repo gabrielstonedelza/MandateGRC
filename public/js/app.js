@@ -12,6 +12,7 @@ import { controlsView, controlDetailView } from './views/controls.js';
 import { findingsView, findingDetailView } from './views/findings.js';
 import { soaView } from './views/soa.js';
 import { packageView } from './views/package.js';
+import { riskTraceView } from './views/trace.js';
 import { usersView, settingsView, accountView } from './views/admin.js';
 import { startOnboarding } from './onboarding.js';
 import { PUBLIC_ROUTES, landingPage, loginPage, registerPage, legalPage, docsPage, privacyContent, termsContent } from './public.js';
@@ -56,6 +57,7 @@ const ROUTES = [
   [/^\/templates$/, templatesView, 'Template Library', can.write],
   [/^\/attestations$/, attestationsView, 'Attestations'],
   [/^\/risks$/, risksView, 'Risk Register', can.read],
+  [/^\/risks\/(\d+)$/, riskTraceView, 'Risk Register', can.read],
   [/^\/exceptions$/, exceptionsView, 'Exceptions', can.read],
   [/^\/soa$/, soaView, 'Statement of Applicability', can.read],
   [/^\/findings$/, findingsView, 'Findings', can.read],

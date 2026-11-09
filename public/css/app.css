@@ -877,3 +877,12 @@ tr.row-overdue td:first-child { box-shadow: inset 3px 0 0 var(--crit); }
 .pkg-n svg { width: 16px; height: 16px; }
 td.hash { word-break: break-all; max-width: 280px; white-space: normal; }
 @media (max-width: 720px) { .pkg-list { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Risk traceability ---------- */
+.trace-verdict { margin: 0; }
+.trace-rows { display: grid; gap: 0; }
+.trace-row { grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.trace-row:last-child { border-bottom: 0; }
+.trace-row.gap { box-shadow: inset 3px 0 0 var(--warn); }
+.trace-row.ok { box-shadow: inset 3px 0 0 var(--ok); }
+@media (max-width: 1100px) { .trace-row { grid-template-columns: minmax(0, 1fr); } }
